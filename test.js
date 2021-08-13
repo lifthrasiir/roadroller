@@ -229,14 +229,31 @@ test('prepareJs without abbrs', t => {
 
 //------------------------------------------------------------------------------
 
-test('Packer', t => {
-    const packer = new Packer([{ type: 'js', action: 'eval', data: 'okay = 12345;' }], { maxMemoryMB: 10 });
+function packAndEval(data) {
+    const packer = new Packer([{ type: 'js', action: 'eval', data }], { maxMemoryMB: 10 });
     const { firstLine, secondLine } = packer.makeDecoder();
 
     // XXX this is only okay-ish because we know the decoder internals
     const possibleVars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
-    let okay = false;
-    eval(`let ${[...possibleVars].join(',')};${firstLine};${secondLine}`);
-    t.is(okay, 12345);
+    // Function doesn't inherit the strictness, which is required for Roadroller outputs
+    return Function('code', 'return eval(code)')(`let ${[...possibleVars].join(',')};${firstLine};${secondLine}`);
+}
+
+test('Packer', t => {
+    t.is(packAndEval('3 + 4 * 5'), 23);
+
+    // abbreviation tests
+    t.is(packAndEval(`
+        const alpha = 42;
+        alpha + alpha + alpha + alpha + alpha
+    `), 42 * 5);
+    t.is(packAndEval(`
+        const alpha = 42, beta = 54;
+        (alpha + alpha + alpha + alpha + alpha) * (beta + beta + beta + beta)
+    `), 42 * 5 * 54 * 4);
+    t.is(packAndEval(`
+        const alpha = 42, beta = 54, gamma = 13;
+        (alpha + alpha + alpha + alpha + alpha) * (beta + beta + beta + beta) * (gamma + gamma + gamma)
+    `), 42 * 5 * 54 * 4 * 13 * 3);
 });
 

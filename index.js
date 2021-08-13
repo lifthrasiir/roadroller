@@ -930,7 +930,7 @@ export class Packer {
                     outputVar = `c=w=String.fromCharCode(...z)`;
                 } else if (this.preparedJs.abbrs.length < 3) {
                     secondLine += `c=w=String.fromCharCode(...z);`;
-                    for (const [, abbr] in this.preparedJs.abbrs) {
+                    for (const [, abbr] of this.preparedJs.abbrs) {
                         secondLine += `with(c.split(\`${escapeCharInTemplate(abbr)}\`))c=join(shift());`;
                     }
                 } else {
