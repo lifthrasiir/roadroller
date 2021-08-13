@@ -1,0 +1,26 @@
+{
+  "name": "roadroller",
+  "version": "1.0.0",
+  "description": "Flattens your JS demo",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "roadroller": "./cli.js"
+  },
+  "scripts": {
+    "compress-demo": "node tools/compress-demo.js",
+    "test": "ava",
+    "prepare": "npm run compress-demo"
+  },
+  "author": "Kang Seonghoon <public+roadroller@mearie.org>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  },
+  "devDependencies": {
+    "ava": "4.0.0-alpha.2",
+    "csso": "^4.2.0",
+    "terser": "^5.7.1"
+  }
+}

@@ -1,0 +1,390 @@
+<!doctype html>
+<meta charset=utf-8>
+<title>Roadroller: Flattens Your JavaScript Demo</title>
+<!-- this placeholder is hidden only when the script completely finishes -->
+<a id=github href=https://github.com/lifthrasiir/roadroller/ style=display:grid;place-content:center;position:fixed;top:0;left:0;bottom:0;right:0;background:#2f2f2f;color:#fff;text-decoration:none>Page not loading? Please take a look at GitHub instead.</a>
+<style>
+#github { z-index: 9; opacity: 1; transition: opacity 0.2s; }
+#github[hidden] { display: grid; opacity: 0; pointer-events: none; }
+
+html { background: #f2f2f2; color: #111; box-sizing: border-box; font: 16px arial; line-height: 1.5; }
+code, pre, textarea { font: 15px courier, monospace; }
+code, pre { background: #ffd07d; }
+*, *:before, *:after { box-sizing: inherit; }
+body, h1, h2, h3, p, ol, ul { margin: 0; padding: 0; font-weight: normal; }
+body { margin: 0 auto; max-width: 60em; }
+p, ul, ol { margin: 1em 0; }
+h1, h2, h3 { color: #415aa6; }
+h1 { font-size: 3em; margin-top: 0.5em; }
+h2, h3 { margin-top: 1.5em; }
+hgroup { text-align: center; line-height: 1.2; }
+hgroup>* { font-weight: bold; }
+hgroup>h2 { font-size: 1.2rem; margin-top: 0; }
+a { color: #418fbf; }
+a[title=Help] { text-decoration: none; }
+table { background: #f2f2f280; border-collapse: collapse; }
+th, td { border: 1px solid #591902; padding: 0 0.5em; text-align: left; vertical-align: top; font-weight: normal; }
+th { background: #ffd07d80; white-space: nowrap; }
+ol, ul { list-style-position: inside; }
+pre { margin: 1em -0.5em; padding: 0.5em; overflow: auto; }
+code { padding: 0 0.1em; }
+.c\$1f { font-size: 0; }
+.c\$1f:before { font-size: 1rem; content: '<U+001F>'; background: #ffd07d; color: red; }
+address { margin: 3em 0 1em 0; color: #415aa6; }
+address svg { float: right; width: 3em; margin-top: -1.5em; vertical-align: middle; fill: currentcolor; }
+@media screen and (max-width: 62em) { body { margin: 0 1em; } }
+div:target, p:target { border-left: 0.25em solid #415aa6; padding-left: 0.25em; margin-left: -0.5em; background: linear-gradient(to right, #415aa640, #415aa600); }
+
+fieldset { border: 1px solid #591902; border-radius: 12px 12px 10px 10px; margin: 0.5em 0; padding: 0; position: relative; display: flex; flex-direction: column; }
+fieldset>header { background: #591902; color: #f2f2f2; padding: 0.2em 0.5em; width: 100%; border-radius: 10px 10px 0 0; display: flex; }
+fieldset>header>span { flex: 1; }
+fieldset>header input { background: inherit; color: inherit; border: 0; border-bottom: 1px solid white; width: 10em; }
+fieldset>footer { border-top: 1px solid #591902; color: #591902; padding: 0.2em 0.5em; width: 100%; order: 4; }
+fieldset>footer ul { margin: 0; }
+fieldset>footer ul.c\$inline { display: flex; flex-wrap: wrap; column-gap: 2em; }
+fieldset>footer li { list-style: none; }
+fieldset>pre { margin: 0; padding: 0.5em; order: 3; white-space: pre-wrap; word-break: break-all; user-select: all; }
+fieldset>pre>span:first-child { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
+fieldset>textarea { width: 100%; background: #fff; border: 0; margin: 0; padding: 0.5em; resize: vertical; min-height: 10em; order: 3; }
+fieldset>aside { font-size: 80%; color: red; padding: 0.2rem 0.5rem 0 0.5rem; order: 2; }
+fieldset.c\$input>aside { background: #fff; }
+fieldset.c\$output>aside { background: #ffd07d; }
+fieldset.c\$outdated>pre { color: #1118; }
+input[type=number] { width: 5em; }
+</style>
+<!--<style>
+#\$newinput { width: 100%; margin: 0.5em 0; padding: 0.5em 0; border: 1px solid #591902; border-radius: 10px; background: #591902; color: white; }
+#\$newinput:hover, #\$newinput:focus { background: #a63f03; }
+#\$newinput:active { background: #f25c05; }
+</style>-->
+
+<hgroup><h1>Roadroller</h1><h2>Flattens Your JavaScript Demo</h2></hgroup>
+<div id=$inputs></div>
+
+<template id=$inputtemplate>
+<fieldset class=c$input>
+    <header>
+        <span><strong>Input<!-- <input id=i$name pattern=[A-Z0-9_]+> <a href=#input-name title=Help>ℹ️</a>--></strong> (<span id=i$size>0</span>B)</span>
+        <!--<button id=i$remove>Remove</button>-->
+    </header>
+    <textarea id=i$data></textarea>
+    <aside id=i$message></aside>
+    <footer><ul class=c$inline>
+        <li><label>Type: <select id=i$type>
+            <option value=js>JavaScript
+            <!--<option value=glsl>GLSL-->
+            <!--<option value=html>HTML-->
+            <option value=text>Text
+            <!--<option value=binary:base64>Binary (base64)-->
+            <!--<option value=binary:hex>Binary (hex)-->
+        </select> <a href=#input-type title=Help>ℹ️</a>
+        <li><label>Action: <select id=i$action>
+            <option value=eval id=i$action$eval>Evaluate
+            <!--<option value=json id=i$action$json>JSON decode-->
+            <!--<option value=string id=i$action$string>String-->
+            <option value=write id=i$action$write>Write to document
+            <!--<option value=array>Array-->
+            <!--<option value=u8array>Typed array-->
+            <!--<option value=base64>Base64-->
+        </select> <a href=#input-action title=Help>ℹ️</a>
+        <!--<li><button id=i$extract>Extract inputs</button> <a href=#extract-inputs title=Help>ℹ️</a>-->
+</template>
+
+<!--<button id=$newinput>Add new input</button>-->
+
+<fieldset id=$output class=c$output>
+<header>
+    <span><strong>Output</strong> (<span id=$outputsize>0B estimated</span>)</span>
+    <button id=$newwindow hidden>Test in new window</button>
+</header>
+<pre><span id=$output1></span><span id=$output2></span></pre>
+<aside id=$outputmessage></aside>
+<footer><ul>
+<li><!--<label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a></label> --><button id=$optimizecontexts>Optimize contexts</button> <a href=#optimize-contexts title=Help>ℹ️</a>
+<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$estimatedmemory>120</span> MB estimated) <a href=#max-memory title=Help>ℹ️</a>
+</ul><!--<details><summary>Advanced configuration</summary><ul>
+<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>
+<li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+) value=> <a href=#chosen-contexts title=Help>ℹ️</a>
+<li><label>Learning rate: <input id=$learningrate pattern=\d+/\d+ value=1/256> <a href=#learning-rate title=Help>ℹ️</a>
+<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size <a href=#uncompressed-only title=Help>ℹ️</a>
+</ul></details>--></footer>
+</fieldset>
+
+<main id=$demotext>
+<p><strong><a href=https://github.com/lifthrasiir/roadroller>Roadroller</a></strong> is a heavyweight JavaScript packer designed for large <a href=https://en.wikipedia.org/wiki/Demoscene>demos</a> of at least 10 KB in size, like <a href=https://js13kgames.com/>js13kGames</a>. Depending on the input it can provide up to 10% additional compression compared to <a href=https://github.com/google/zopfli>Zopfli</a>.
+<p>Roadroller is considered “heavyweight” unlike typical JS packers such as <a href=http://www.iteral.com/jscrush/>JSCrush</a> or <a href=https://siorki.github.io/regPack.html>RegPack</a>, because it is quite resource intensive and requires both a considerable amount of memory and a non-negligible run time. The default should work for most devices, but you can configure both aspects as you need.
+
+<h2>Usage</h2>
+<p>By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP/gzip (or more accurately, <a href=https://en.wikipedia.org/wiki/Deflate>DEFLATE</a>). Ideally your JS code should be already minified, probably using <a href=https://terser.org/>Terser</a> or <a href=https://closure-compiler.appspot.com/home>Closure Compiler</a>; Roadroller only does a minimal whitespace and comment suppression.
+<p>The resulting code will look like this:
+<pre>_='Zos~ZyF_sTdvfgJ^bIq<span class=c$1f>&#31;</span>_wJWLGSIz}<span class=c$1f>&#31;</span>Chb?rMch}...'&#10;t=12345678;M=1&lt;&lt;17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint32Array(12&lt;&lt;21).fill(M/4);/* omitted */;eval(c)</pre>
+<p>The first line is a compressed data. It can contain control characters <code class=c$1f>&#31;</code> that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
+<p>The second line is a compressor tuned for this particular input. By default the decompressed data immediately goes through <code>eval</code>, but you can configure what to do with that.
+<p>The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from <a href=http://www.advancemame.it/comp-readme>AdvanceCOMP</a> or the aforementioned Zopfli. It is also possible but not recommended<sup>*</sup> to put the first line to a separate file and load it with a separate <code>&lt;script&gt;</code> tag.
+<blockquote><p><small>* This is not recommended because any additional file to ZIP incurs at least 88+2n bytes of overhead where n is the length of file name and that overhead mostly negates the additional compression. Instead put everything into a single file and run ADVZIP or Zopfli.</small></blockquote>
+
+<!--
+<h3>Multiple Inputs</h3>
+<p>You can also give multiple inputs to Roadroller; for example you can put shaders and map data. The executed code will receive all decompressed inputs. This is more efficient than putting them into strings because each input can be separately modelled.
+-->
+<h3>Input Configuration</h3>
+<p>Each input can be further configured by input type and action.
+<div id=input-type>
+<p><strong>Input type</strong> determines the preprocessing step to improve the compression.<!-- Dropping a file to the input window also tries to detect the correct input type.-->
+<table>
+<tr><th>JavaScript<td>Assumes a valid JS code. Automatically removes all redundant whitespace and comments and enables a separate modelling for embedded strings. This also works for JSON.
+<!--<tr><th>GLSL<td>Assumes a valid GLSL code. Automatically removes all redundant whitespace and comments.-->
+<!--<tr><th>HTML<td>Assumes a valid HTML. (TODO)-->
+<tr><th>Text<td>Assumes a human-readable Unicode text that can be encoded in UTF-8. This can also be used for JavaScript code that should not undergo preprocessing.
+<!--<tr><th>Binary<td>Does nothing. You can choose base64 or hex for the input encoding.-->
+</table>
+</div>
+<div id=input-action>
+<p><strong>Input action</strong> determines what to do with the decompressed data.<!-- All action except for the evaluate produces a value to the variable named <code>_</code> by default, which is either a value itself for a single input and an array of values for multiple inputs.-->
+<table>
+<tr><th>Evaluate<td><!--<em>(JS, text only)</em> -->Evaluates the decompressed JavaScript code. If there are multiple inputs there should be exactly one JavaScript input with evaluate action, since subsequent inputs will be decompressed in that code. The resulting value is always a code string, which may include decoders for subsequent inputs.
+<!--<tr><th>JSON decode<td><em>(JS, text only)</em> Parses and returns a JSON value with <code>JSON.parse</code>.-->
+<!--<tr><th>String<td><em>(No binary)</em> Returns a string.-->
+<tr><th>Write to document<td><!--<em>(No binary)</em> -->Writes a decompressed string to <code>document</code>. Typically used with HTML.
+<!--<tr><th>Array<td>Returns an array of bytes.-->
+<!--<tr><th>Typed array<td>Returns a <code>Uint8Array</code> value.-->
+<!--<tr><th>Base64<td>Returns a base64-encoded string. Handy for data URIs.-->
+</table>
+</div>
+<!--
+<p id=input-name><strong>Input name</strong> is required for accessing each input from the decompressed code. This is required if the input produces an output value.</p>
+<p id=extract-inputs><strong>Extract inputs</strong> button can be used for the JavaScript input with the evaluate action. This will try to extract long embedded strings and determine the best type for each input. This assumes that the compressed code doesn't make use of the output variable elsewhere; you can change the variable name from the configuration.
+-->
+
+<h3>Output Configuration</h3>
+<!--
+<p id=num-contexts><strong>Number of contexts</strong> relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
+-->
+<p id=optimize-contexts><strong>Optimize contexts</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
+<p id=max-memory><strong>Maximum memory usage</strong> configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
+
+<!--
+<h3>Advanced Configuration</h3>
+<p id=output-var><strong>Output variable name</strong> sets the variable name for output values. If the name is empty, it is determined from the input code and typically named <code>_</code>. You don't need to change this unless you are doing a weird thing and the code can refer to variables that do not appear in verbatim.
+<p id=chosen-contexts><strong>Chosen contexts</strong> are actual modelling parameters, one number for each context. Each bit of numbers is set if the particular order is used for given sparse context: 5 = 101<sub>(2)</sub> for example would correspond to the sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
+<p id=learning-rate><strong>Learning rate</strong> is a simple fraction that adjusts how fast would the model adapt, where larger is faster. The default is 1/256 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try 1/128.
+<p id=uncompressed-only><strong>Optimize for uncompressed size</strong> assumes the absence of the outer comperssion algorithm like DEFLATE. This is <em>bad</em> for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.
+-->
+
+<h2>Command-line Usage and API</h2>
+<p>Roadroller is available as an <a href=https://www.npmjs.com/package/roadroller>NPM package</a>:
+<pre>$ npx roadroller input.js -o output.js</pre>
+<p>You can also use Roadroller as a library to integrate with your build pipeline. Please take a look at the <a href=https://github.com/lifthrasiir/roadroller>GitHub project page</a> for details.</p>
+
+</main>
+
+<address>
+Roadroller is brought to you by <a href=https://mearie.org/><svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 182 186"><path d="M0 0h54v102H19v52h35v32H0m34-70h20v24H34"/><path d="M64 0h54v1e2a22 22 0 000 56v30H64m54-72a12 12 0 000 28v-28"/><path d="M128 0h54v102h-33v12h33v8h-33v32h33v32h-54m35-52h19v8h-19"/></svg>Kang Seonghoon</a>.
+
+<script type=module>
+import { ArrayBufferPool, DefaultModel, defaultSparseSelectors, Packer } from '../index.js';
+import { estimateDeflatedSize } from '../deflate.js';
+
+let arrayBufferPool = new ArrayBufferPool();
+
+const makeInput = () => {
+    const root = $inputtemplate.content.firstElementChild.cloneNode(true);
+    for (const e of root.querySelectorAll('[id]')) {
+        root[e.id] = e;
+        e.removeAttribute('id');
+    }
+
+    // updated by i$data.oninput
+    let data = '';
+    let dataOrigLength = -1;
+
+    /*
+    root.i$name.onchange = () => {
+        root.i$name.value = root.i$name.value.toUpperCase().trim();
+        refreshOutput();
+    };
+    */
+
+    root.i$data.oninput = () => {
+        const type = root.i$type.value;
+        root.i$message.textContent = '';
+        /*
+        if (type === 'binary:base64') {
+            data = root.i$data.value.replace(/\s/g, '');
+            if (data.match(/^(?:[0-9a-z+\/]{4})*(?:[0-9a-z+\/](?:[0-9a-z+\/=](?:[0-9a-z+\/=]=?)?)?)?$/i)) {
+                data = [...btoa(data)].map(c => c.charCodeAt(0));
+            } else {
+                data = null;
+                root.i$message.textContent = 'Error: invalid base64';
+            }
+        } else if (type === 'binary:hex') {
+            data = root.i$data.value.replace(/\s/g, '');
+            if (data.match(/^(?:[0-9a-f]{2})*$/i)) {
+                const buf = [];
+                for (let i = 0; i < data.length; i += 2) buf.push(parseInt(data.substr(i, 2), 16));
+                data = buf;
+            } else {
+                data = null;
+                root.i$message.textContent = 'Error: invalid hex encoding';
+            }
+        } else*/ {
+            data = root.i$data.value;
+        }
+        if (data !== null) {
+            dataOrigLength = Array.isArray(data) ? data.length : unescape(encodeURIComponent(data)).length;
+            root.i$size.textContent = dataOrigLength.toLocaleString();
+            refreshOutput();
+        } else {
+            dataOrigLength = -1;
+            root.i$size.textContent = '-';
+        }
+    };
+
+    root.i$type.onchange = () => {
+        root.i$data.oninput();
+        /*
+        root.i$action$eval.hidden = root.i$action$json.hidden = !['js', 'text'].includes(root.i$type.value);
+        root.i$action$string.hidden = root.i$action$write.hidden = root.i$type.value.startsWith('binary:');
+        */
+        if (data !== null) refreshOutput();
+    };
+
+    root.i$action.onchange = () => {
+        if (data !== null) refreshOutput();
+    };
+
+    root.toJS = () => {
+        if (data === null) return;
+        return { type: root.i$type.value.replace(/:.*$/, ''), data, dataOrigLength, action: root.i$action.value };
+    };
+
+    return root;
+};
+
+const initOutput = () => {
+    $maxmemory.oninput = () => {
+        const numContexts = 12; // TODO for now
+        $estimatedmemory.textContent = numContexts * 5 * 2**Math.floor(Math.log2($maxmemory.value / numContexts / 5));
+        refreshOutput();
+    };
+
+    $optimizecontexts.onclick = async () => {
+        if (optimizing) return;
+        optimizing = true;
+        $optimizecontexts.disabled = true;
+        try {
+            await compress(true);
+        } finally {
+            optimizing = false;
+            $optimizecontexts.disabled = false;
+        }
+    };
+};
+
+let initialRefresh = true;
+let output = null;
+let lastSelectors;
+let refreshTicks = 0; // used to halt the computation when it becomes outdated
+let optimizing = false;
+
+const refreshOutput = () => {
+    if (!optimizing) compress(false);
+};
+
+const updateOutput = (prefix, origLength, compressedLength) => {
+    const ratio = origLength > 0 ? 100 - compressedLength / origLength * 100 : -Infinity;
+    $outputsize.textContent = `${prefix}${compressedLength.toLocaleString()}B estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'}`;
+};
+
+const compress = async optimize => {
+    $output.classList.add('c$outdated');
+    $outputmessage.textContent = '';
+    $outputsize.textContent = 'waiting...';
+    $newwindow.hidden = true;
+    output = null;
+
+    let lastRefreshTicks = refreshTicks;
+
+    try {
+        const maxMemoryMB = Number($maxmemory.value);
+        if (!(10 <= maxMemoryMB && maxMemoryMB <= 1024)) {
+            throw 'maximum memory usage should be between 10 MB and 1 GB';
+        }
+
+        const inputs = [];
+        for (const input of $inputs.children) {
+            inputs.push(input.toJS());
+        }
+        if (inputs.some(input => !input)) return;
+        const origLength = inputs.reduce((acc, input) => acc + input.dataOrigLength, 0);
+
+        lastRefreshTicks = ++refreshTicks;
+        if (initialRefresh || optimize) {
+            // do not wait on the initial refresh for demonstration
+            initialRefresh = false;
+        } else {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            if (lastRefreshTicks !== refreshTicks) return;
+        }
+
+        $outputsize.textContent = optimize ? 'optimizing...' : 'compressing...';
+        await new Promise(resolve => setTimeout(resolve, 1));
+
+        const options = {
+            maxMemoryMB,
+            arrayBufferPool,
+            sparseSelectors: (optimize && lastSelectors) || defaultSparseSelectors(),
+        };
+
+        let prefix = '';
+        const packer = new Packer(inputs, options);
+
+        if (optimize) {
+            let tick = 0;
+            const result = await packer.optimizeSparseSelectors(async info => {
+                const clock = 0x1f550 + tick++ % 12;
+                updateOutput(`${String.fromCodePoint(clock)} optimizing: `, origLength, info.bestSize);
+                console.info(
+                    `(T=${info.temperature.toFixed(4)}) trying ${JSON.stringify(info.current)}:`,
+                    info.currentSize, info.bestUpdated ? '<-' : info.rejected ? 'x' : '');
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            });
+            prefix = `optimized in ${(result.elapsedMsecs / 1000).toFixed(1)}s: `;
+            lastSelectors = result.best; // so that we can run optimize multiple times
+        }
+
+        const { firstLine, firstLineLengthInBytes, secondLine } = packer.makeDecoder();
+        if (!optimize && lastRefreshTicks !== refreshTicks) return;
+        output = firstLine + '\n' + secondLine;
+        $output1.textContent = firstLine + '\n';
+        $output2.textContent = secondLine;
+        const compressedLength = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
+        updateOutput(prefix, origLength, compressedLength);
+
+        $newwindow.hidden = false;
+    } catch (e) {
+        $outputsize.textContent = 'failed';
+        $outputmessage.textContent = 'Error: ' + e;
+        $output1.textContent = $output2.textContent = '';
+    } finally {
+        if (lastRefreshTicks === refreshTicks) {
+            $output.classList.remove('c$outdated');
+        }
+    }
+};
+
+$newwindow.onclick = () => {
+    const w = window.open('');
+    const script = document.createElement('script');
+    script.textContent = output;
+    w.document.head.append(script);
+};
+
+initOutput();
+const input = makeInput();
+$inputs.append(input);
+input.i$data.value = 'document.write`<xmp style=white-space:pre-wrap>\n\n' + $demotext.innerText + '`';
+input.i$data.oninput();
+
+github.hidden = true;
+</script>
