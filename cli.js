@@ -58,6 +58,8 @@ Output options:
   so that you can copy and paste them for later uses.
 
 Other options:
+-q|--silent
+  Suppresses any diagnostic messages.
 -h|--help
   Prints this message.
 -V|--version
@@ -83,6 +85,7 @@ const options = {
 let optimize;
 let outputPath;
 let nextIsArg = false;
+let silent = false;
 
 for (let i = 2; i < process.argv.length; ++i) {
     const opt = process.argv[i];
@@ -128,6 +131,8 @@ for (let i = 2; i < process.argv.length; ++i) {
     } else if (opt.match(/^(?:-V|--version)$/)) {
         console.log(`Roadroller ${VERSION}`);
         process.exit(0);
+    } else if (opt.match(/^(?:-q|--silent)$/)) {
+        silent = true;
     } else if (m = opt.match(/^(?:-t|--type)=?(.*)$/)) {
         if (currentInput.type !== undefined) throw 'duplicate --type arguments';
         currentInput.type = getArg(m);
@@ -186,11 +191,14 @@ const packer = new Packer(inputs, options);
 
 if (optimize) {
     const result = await packer.optimizeSparseSelectors(info => {
+        if (silent) return;
         console.warn(
             `(T=${info.temperature.toFixed(4)}) trying ${JSON.stringify(info.current)}:`,
             info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
     });
-    console.warn(`search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ${JSON.stringify(result.best)}:`, result.bestSize);
+    if (!silent) {
+        console.warn(`search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ${JSON.stringify(result.best)}:`, result.bestSize);
+    }
 }
 
 const { firstLine, firstLineLengthInBytes, secondLine } = packer.makeDecoder();
@@ -200,7 +208,7 @@ const origLength = inputs.reduce((acc, { data } ) => {
 }, 0);
 const compressedLength = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
 const ratio = origLength > 0 ? 100 - compressedLength / origLength * 100 : -Infinity;
-if (!optimize) {
+if (!optimize && !silent) {
     console.warn(`compressed ${origLength}B into ${compressedLength}B (estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'}).`);
 }
 if (outputPath === '-') {
