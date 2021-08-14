@@ -164,7 +164,7 @@ for (let i = 2; i < process.argv.length; ++i) {
             }
             selectors.sort((a, b) => a - b);
         } else {
-            selectors = getArg(m).split(/,/g).map(v => parseInt(v, 10)).sort((a, b) => a - b);
+            selectors = arg.split(/,/g).map(v => parseInt(v, 10)).sort((a, b) => a - b);
             if (selectors.length > 64) throw 'too many selectors in --selectors argument';
             if (selectors.some(sel => sel !== sel || sel < 0)) throw 'invalid selector in --selectors argument';
             if (selectors.find((sel, i) => selectors[i-1] === sel)) throw 'duplicate selector in --selectors argument';
