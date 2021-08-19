@@ -246,8 +246,8 @@ test('prepareJs without abbrs', t => {
 
 //------------------------------------------------------------------------------
 
-function packAndEval(data) {
-    const packer = new Packer([{ type: 'js', action: 'eval', data }], { maxMemoryMB: 10 });
+function packAndEval(data, options = {}) {
+    const packer = new Packer([{ type: 'js', action: 'eval', data }], { maxMemoryMB: 10, ...options });
     const { firstLine, secondLine } = packer.makeDecoder();
 
     // XXX this is only okay-ish because we know the decoder internals
@@ -272,5 +272,10 @@ test('Packer', t => {
         const alpha = 42, beta = 54, gamma = 13;
         (alpha + alpha + alpha + alpha + alpha) * (beta + beta + beta + beta) * (gamma + gamma + gamma)
     `), 42 * 5 * 54 * 4 * 13 * 3);
+});
+
+test('Packer with very high order context', t => {
+    t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [511] }), 23);
+    t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [512] }), 23);
 });
 

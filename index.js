@@ -795,6 +795,7 @@ export class Packer {
             }
             selectors.push(bits.reverse());
         }
+        const singleDigitSelectors = sparseSelectors.every(sel => sel < 512);
         const quotes = [...model.quotesSeen].sort((a, b) => a - b);
 
         // \0 is technically allowed by JS but can't appear in <script>
@@ -907,9 +908,14 @@ export class Packer {
 
                 // q: sum of weighted probabilities
                 // u: the context hash
-                `u='${selectors.map(i => i.join('')).join('0')}'.split(q=0).map((j,i)=>` +
+                (singleDigitSelectors ?
+                    `u='${selectors.map(i => i.join('')).join('0')}'.split(q=0)`
+                :
+                    `q=0,u=${JSON.stringify(selectors)}`
+                ) + `.map((j,i)=>` +
                     `((1<<${contextBits})-1&` +
-                        `[...j].reduce((j,i)=>j*997+(z[k-i]|0)|0,0)*997+v` +
+                        (singleDigitSelectors ? `[...j]` : `j`) +
+                        `.reduce((j,i)=>j*997+(z[k-i]|0)|0,0)*997+v` +
                         (quotes.length > 0 ? '+!!f*129' : '') +
                     `)*${numModels}+i` +
                 `),` +
