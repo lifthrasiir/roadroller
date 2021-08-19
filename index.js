@@ -52,9 +52,7 @@ export class ArrayBufferPool {
 
 //------------------------------------------------------------------------------
 
-function getAnsL(outBits) {
-    return 1 << (28 - outBits);
-}
+const getAnsL = outBits => 1 << (28 - outBits);
 
 // roughly based on https://github.com/rygorous/ryg_rans/blob/master/rans_byte.h
 export class AnsEncoder {
@@ -378,7 +376,7 @@ export class DefaultModel extends LogisticMixModel {
 
 //------------------------------------------------------------------------------
 
-export function compressWithModel(input, model, options) {
+export const compressWithModel = (input, model, options) => {
     const { inBits, outBits, precision, calculateByteEntropy } = options;
     const encoder = new AnsEncoder(options);
 
@@ -411,9 +409,9 @@ export function compressWithModel(input, model, options) {
 
     const bufLengthInBytes = Math.ceil(buf.length * outBits / 8);
     return { state, buf, inputLength: input.length, bufLengthInBytes, byteEntropy };
-}
+};
 
-export function decompressWithModel({ state, buf, inputLength }, model, options) {
+export const decompressWithModel = ({ state, buf, inputLength }, model, options) => {
     const { inBits } = options;
     const decoder = new AnsDecoder({ state, buf }, options);
 
@@ -432,18 +430,16 @@ export function decompressWithModel({ state, buf, inputLength }, model, options)
 
     if (model.release) model.release();
     return reconstructed;
-}
+};
 
 //------------------------------------------------------------------------------
 
-export function defaultSparseSelectors() {
-    // this was determined from running optimizeSparseSelectors([]) against samples,
-    // where selectors are limited to 0..63 for more thorough search.
-    // these were most frequent sparse orders and should be a good baseline.
-    return [0, 1, 2, 3, 6, 7, 13, 21, 25, 42, 50, 57];
-}
+// this was determined from running optimizeSparseSelectors([]) against samples,
+// where selectors are limited to 0..63 for more thorough search.
+// these were most frequent sparse orders and should be a good baseline.
+export const defaultSparseSelectors = () => [0, 1, 2, 3, 6, 7, 13, 21, 25, 42, 50, 57];
 
-export async function optimizeSparseSelectors(selectors, calculateSize, progress) {
+export const optimizeSparseSelectors = async (selectors, calculateSize, progress) => {
     let current = selectors.slice();
     let currentSize = calculateSize(selectors);
     let best = selectors.slice();
@@ -486,7 +482,7 @@ export async function optimizeSparseSelectors(selectors, calculateSize, progress
     }
 
     return { elapsedMsecs: performance.now() - searchStart, best, bestSize }
-}
+};
 
 //------------------------------------------------------------------------------
 
