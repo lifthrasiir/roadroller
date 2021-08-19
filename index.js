@@ -835,7 +835,12 @@ export class Packer {
         // 0.
         // _: rANS output encoded in lowest 6 bits (higher bits are chosen to avoid backslash)
         // this should be isolated from other code for the best DEFLATE result
-        const firstLine = `_='${String.fromCharCode(...buf.map(c => c === 0x1c || c === 0x3f ? c : c | 0x40))}'`;
+        let firstLine = `_='`;
+        const CHUNK_SIZE = 8192;
+        for (let i = 0; i < buf.length; i += CHUNK_SIZE) {
+            firstLine += String.fromCharCode(...buf.slice(i, i + CHUNK_SIZE).map(c => c === 0x1c || c === 0x3f ? c : c | 0x40));
+        }
+        firstLine += `'`;
 
         let secondLine =
             // 1. initialize other variables

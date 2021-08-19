@@ -1,4 +1,5 @@
 import test from 'ava';
+import * as crypto from 'crypto';
 import {
     AnsEncoder, AnsDecoder, DefaultModel, Packer,
     compressWithModel, decompressWithModel
@@ -277,5 +278,16 @@ test('Packer', t => {
 test('Packer with very high order context', t => {
     t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [511] }), 23);
     t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [512] }), 23);
+});
+
+test('Packer with high entropy', t => {
+    let data = '';
+    for (let i = 0; i < (1 << 8); ++i) {
+        data += String.fromCharCode(...crypto.randomBytes(1 << 12));
+    }
+    // we've got 1 MB of random data, which can't be really compressed
+    const packer = new Packer([{ type: 'text', action: 'write', data }], { maxMemoryMB: 10, sparseSelectors: [0] });
+    packer.makeDecoder();
+    t.pass();
 });
 
