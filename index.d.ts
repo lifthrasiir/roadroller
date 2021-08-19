@@ -1,8 +1,6 @@
 export class ArrayBufferPool {
     constructor();
     allocate(parent: object, size: number): ArrayBuffer;
-    newUint32Array(parent: object, length: number): Uint32Array;
-    newUint8Array(parent: object, length: number): Uint8Array;
     release(buf: ArrayBuffer): void;
 }
 
@@ -173,6 +171,7 @@ export interface PackerOptions {
 
 export class Packer {
     constructor(inputs: Input[], options: PackerOptions);
+    readonly memoryUsageMB: number;
     makeDecoder(): {
         firstLine: string;
         firstLineLengthInBytes: number;

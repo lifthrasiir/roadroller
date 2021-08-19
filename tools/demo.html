@@ -101,7 +101,7 @@ input[type=number] { width: 5em; }
 <aside id=$outputmessage></aside>
 <footer><ul>
 <li><!--<label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a></label> --><button id=$optimizecontexts>Optimize contexts</button> <a href=#optimize-contexts title=Help>ℹ️</a>
-<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$estimatedmemory>120</span> MB estimated) <a href=#max-memory title=Help>ℹ️</a>
+<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$estimatedmemory>144</span> MB estimated) <a href=#max-memory title=Help>ℹ️</a>
 </ul><!--<details><summary>Advanced configuration</summary><ul>
 <li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>
 <li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+) value=> <a href=#chosen-contexts title=Help>ℹ️</a>
@@ -264,7 +264,7 @@ const makeInput = () => {
 const initOutput = () => {
     $maxmemory.oninput = () => {
         const numContexts = 12; // TODO for now
-        $estimatedmemory.textContent = numContexts * 5 * 2**Math.floor(Math.log2($maxmemory.value / numContexts / 5));
+        $estimatedmemory.textContent = numContexts * 3 * 2**Math.floor(Math.log2($maxmemory.value / numContexts / 3));
         refreshOutput();
     };
 

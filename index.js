@@ -31,14 +31,6 @@ export class ArrayBufferPool {
         return buf;
     }
 
-    newUint32Array(parent, length) {
-        return new Uint32Array(this.allocate(parent, length * 4));
-    }
-
-    newUint8Array(parent, length) {
-        return new Uint8Array(this.allocate(parent, length));
-    }
-
     // FinalizationRegistry is also possible, but GC couldn't keep up with the memory usage
     release(buf) {
         let available = this.pool.get(buf.byteLength);
@@ -49,6 +41,14 @@ export class ArrayBufferPool {
         available.push(buf);
     }
 }
+
+const newUintArray = (pool, parent, nbits, length) => {
+    if (nbits <= 8) return new Uint8Array(pool ? pool.allocate(parent, length) : length);
+    if (nbits <= 16) return new Uint16Array(pool ? pool.allocate(parent, length * 2) : length);
+    if (nbits <= 32) return new Uint32Array(pool ? pool.allocate(parent, length * 4) : length);
+    if (nbits <= 64) return new Uint64Array(pool ? pool.allocate(parent, length * 8) : length);
+    throw 'newUintArray: nbits is too large';
+};
 
 //------------------------------------------------------------------------------
 
@@ -184,13 +184,8 @@ export class DirectContextModel {
         this.modelMaxCount = modelMaxCount;
 
         this.arrayBufferPool = arrayBufferPool;
-        if (arrayBufferPool) {
-            this.predictions = arrayBufferPool.newUint32Array(this, 1 << contextBits);
-            this.counts = arrayBufferPool.newUint8Array(this, 1 << contextBits);
-        } else {
-            this.predictions = new Uint32Array(1 << contextBits);
-            this.counts = new Uint8Array(1 << contextBits)
-        }
+        this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
+        this.counts = newUintArray(arrayBufferPool, this, Math.ceil(Math.log2(modelMaxCount)), 1 << contextBits);
         this.predictions.fill(1 << (precision - 1));
         this.counts.fill(0);
 
@@ -213,10 +208,34 @@ export class DirectContextModel {
             ++this.counts[context];
         }
 
-        const delta = ((actualBit << this.precision) - this.predictions[context]) * (1 << (30 - this.precision));
-        if (delta < -0x80000000 || delta > 0x7fffffff) {
-            throw new Error('DirectContextModel.update: delta overflow');
-        }
+        // adjust P = predictions[context] by (actual - P) / (counts[context] + 0.5).
+        // when delta = (actual - P) * 2, this adjustment equals to delta / (2 * counts[context] + 1).
+        // in the compact decoder (2 * counts[context] + 1) is directly stored in the typed array.
+        //
+        // claim:
+        // 1. the entire calculation always stays in the 32-bit signed integer.
+        // 2. P always stays in the [0, 2^precision) range.
+        //
+        // proof:
+        // assume that 0 <= P < 2^precision and P is an integer.
+        // counts[context] is already updated so counts[context] >= 1.
+        //
+        // if delta > 0, delta = (2^precision - P) * 2^(30-precision) < 2^30.
+        // then P' = P + trunc(delta / (2 * counts[context] + 1)) / 2^(29-precision)
+        //        <= P + delta / 3 / 2^(29-precision)
+        //         = P + (2^precision - P) * 2^(30-precision) / 2^(29-precision) / 3
+        //         = 2/3 2^precision + 1/3 P
+        //        <= 2/3 2^precision + 1/3 (2^precision - 1)
+        //         = 2^precision - 1/3.
+        // therefore P' < 2^precision.
+        //
+        // if delta < 0, delta = -P * 2^(30-precision) > -2^30.
+        // then P' = P + trunc(delta / (2 * counts[context] + 1)) / 2^(29-precision)
+        //        >= P + delta / 3 / 2^(29-precision)
+        //         = P - 2/3 P
+        //         > 0.
+        // therefore P' >= 0.
+        const delta = ((actualBit << this.precision) - this.predictions[context]) << (30 - this.precision);
         this.predictions[context] += (delta / (2 * this.counts[context] + 1) | 0) >> (29 - this.precision);
 
         this.bitContext = (this.bitContext << 1) | actualBit;
@@ -486,15 +505,21 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
 
 //------------------------------------------------------------------------------
 
+const predictionBytesPerContext = options => (options.precision <= 8 ? 1 : options.precision <= 16 ? 2 : 4);
+const countBytesPerContext = options => (options.modelMaxCount < 128 ? 1 : options.modelMaxCount < 32768 ? 2 : 4);
+
 export class Packer {
     constructor(inputs, options = {}) {
         options.sparseSelectors = options.sparseSelectors || defaultSparseSelectors();
         options.maxMemoryMB = options.maxMemoryMB || 150;
-        options.contextBits = options.contextBits || (Math.log2(options.maxMemoryMB / options.sparseSelectors.length / 5) + 20 | 0);
         options.precision = options.precision || 16;
         options.modelMaxCount = options.modelMaxCount || 63;
         options.learningRateNum = options.learningRateNum || 1;
         options.learningRateDenom = options.learningRateDenom || 256;
+        if (!options.contextBits) {
+            const bytesPerContext = predictionBytesPerContext(options) + countBytesPerContext(options);
+            options.contextBits = Math.log2(options.maxMemoryMB / options.sparseSelectors.length / bytesPerContext) + 20 | 0;
+        }
         this.options = options;
 
         this.inputsByType = {};
@@ -534,6 +559,11 @@ export class Packer {
         if (inputs.length !== 1 || !['js', 'text'].includes(inputs[0].type) || !['eval', 'write', 'console'].includes(inputs[0].action)) {
             throw new Error('Packer: this version of Roadroller supports exactly one JS or text input, please stay tuned for more!');
         }
+    }
+
+    get memoryUsageMB() {
+        const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
+        return ((this.options.sparseSelectors.length * bytesPerContext) << this.options.contextBits) / 1048576;
     }
 
     prepare() {
@@ -739,6 +769,9 @@ export class Packer {
             compressWithModel(this.combinedInput, model, this.options);
 
         const numModels = sparseSelectors.length;
+        const predictionBits = 8 * predictionBytesPerContext(this.options);
+        const countBits = 8 * countBytesPerContext(this.options);
+
         const selectors = [];
         for (const selector of sparseSelectors) {
             const bits = [];
@@ -798,8 +831,8 @@ export class Packer {
             `t=${state};` +
             `M=1<<${precision + 1};` +
             `w=${JSON.stringify(Array(numModels).fill(0))};` +
-            `p=new Uint32Array(${numModels}<<${contextBits}).fill(M/4);` +
-            `c=new Uint8Array(${numModels}<<${contextBits}).fill(1);` +
+            `p=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(M/4);` +
+            `c=new Uint${countBits}Array(${numModels}<<${contextBits}).fill(1);` +
 
             // z: decoded data
             // r: read position in _
