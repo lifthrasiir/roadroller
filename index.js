@@ -10,6 +10,9 @@ import {
     TYPE_IdentifierName,
     TYPE_StringLiteral,
     TYPE_NoSubstitutionTemplate,
+    TYPE_TemplateHead,
+    TYPE_TemplateTail,
+    TYPE_RegularExpressionLiteral,
     TYPE_Invalid,
 } from './js-tokens.js';
 
@@ -606,6 +609,15 @@ export class Packer {
     }
 
     static prepareJs(inputs, { minFreqForAbbrs = 1 } = {}) {
+        // we strongly avoid a token like 'this\'one' because the context model doesn't
+        // know about escapes and anything after that would be suboptimally compressed.
+        // we can't still avoid something like `foo${`bar`}quux`, where `bar` would be
+        // suboptimall compressed, but at least we will return to the normal state at the end.
+        const reescape = (s, pattern) =>
+            s.replace(
+                new RegExp(`\\\\?(${pattern})|\\\\.`, 'g'),
+                (m, q) => q ? '\\x' + q.charCodeAt(0).toString(16).padStart(2, '0') : m);
+
         const identFreqs = new Map();
         for (const input of inputs) {
             const tokens = [];
@@ -634,13 +646,24 @@ export class Packer {
 
                     case TYPE_StringLiteral:
                     case TYPE_NoSubstitutionTemplate:
-                        if (token.closed) {
-                            try {
-                                forbiddenIdents.add((0, eval)(token.value));
-                            } catch {
-                                // the identifier likely has an invalid escape sequence, can ignore them
-                            }
+                        token.value = token.value[0] + reescape(token.value.slice(1, -1), token.value[0]) + token.value[0];
+                        try {
+                            forbiddenIdents.add((0, eval)(token.value));
+                        } catch {
+                            // the identifier likely has an invalid escape sequence, can ignore them
                         }
+                        break;
+
+                    case TYPE_TemplateHead:
+                        token.value = '`' + reescape(token.value.slice(1), '`');
+                        break;
+
+                    case TYPE_TemplateTail:
+                        token.value = reescape(token.value.slice(0, -1), '`') + '`';
+                        break;
+
+                    case TYPE_RegularExpressionLiteral:
+                        token.value = reescape(token.value, '[\'"`]');
                         break;
 
                     case TYPE_Invalid:

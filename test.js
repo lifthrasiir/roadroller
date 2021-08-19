@@ -259,9 +259,13 @@ function packAndEval(data, options = {}) {
     return Function('code', 'return eval(code)')(`let ${[...possibleVars].join(',')};${firstLine};${secondLine}`);
 }
 
+function packAndReturn(data, options = {}) {
+    return packAndEval(data, { action: 'return', ...options });
+}
+
 test('Packer', t => {
     t.is(packAndEval('3 + 4 * 5'), 23);
-    t.is(packAndEval('3 + 4 * 5', { action: 'return' }), '3+4*5');
+    t.is(packAndReturn('3 + 4 * 5'), '3+4*5');
 
     // abbreviation tests
     t.is(packAndEval(`
@@ -276,6 +280,23 @@ test('Packer', t => {
         const alpha = 42, beta = 54, gamma = 13;
         (alpha + alpha + alpha + alpha + alpha) * (beta + beta + beta + beta) * (gamma + gamma + gamma)
     `), 42 * 5 * 54 * 4 * 13 * 3);
+
+    // reescape tests
+    t.is(packAndReturn('"asdf\'asdf"'), '"asdf\'asdf"');
+    t.is(packAndReturn('"asdf\\"asdf"'), '"asdf\\x22asdf"');
+    t.is(packAndReturn('"asdf\\\'asdf"'), '"asdf\\\'asdf"');
+    t.is(packAndReturn('"asdf\\\"asdf"'), '"asdf\\x22asdf"');
+    t.is(packAndReturn('"asdf\\\\\'asdf"'), '"asdf\\\\\'asdf"');
+    t.is(packAndReturn("'asdf\"asdf'"), "'asdf\"asdf'");
+    t.is(packAndReturn("'asdf\\'asdf'"), "'asdf\\x27asdf'");
+    t.is(packAndReturn("'asdf\\\"asdf'"), "'asdf\\\"asdf'");
+    t.is(packAndReturn("'asdf\\\'asdf'"), "'asdf\\x27asdf'");
+    t.is(packAndReturn("'asdf\\\\\"asdf'"), "'asdf\\\\\"asdf'");
+    t.is(packAndReturn('`asdf\\\`asdf`'), '`asdf\\x60asdf`');
+    t.is(packAndReturn('`asdf\\\\\\\`asdf`'), '`asdf\\\\\\x60asdf`');
+    t.is(packAndReturn('`foo\\\`${`asdf\\\\\\\`asdf`}\\\`bar`'), '`foo\\x60${`asdf\\\\\\x60asdf`}\\x60bar`');
+    t.is(packAndReturn('/[\'"`]/g'), '/[\\x27\\x22\\x60]/g');
+    t.is(packAndReturn('/[\\\'\\"\\`]/g'), '/[\\x27\\x22\\x60]/g');
 });
 
 test('Packer with very high order context', t => {
@@ -289,6 +310,6 @@ test('Packer with high entropy', t => { // also test long inputs
         data += String.fromCharCode(...crypto.randomBytes(1 << 12));
     }
     // we've got 256 KB of random data, which can't be really compressed
-    t.is(packAndEval(data, { type: 'text', action: 'return', sparseSelectors: [0] }), data);
+    t.is(packAndReturn(data, { type: 'text', sparseSelectors: [0] }), data);
 });
 
