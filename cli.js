@@ -137,7 +137,7 @@ for (let i = 2; i < process.argv.length; ++i) {
         if (currentInput.type !== undefined) throw 'duplicate --type arguments';
         currentInput.type = getArg(m);
     } else if (m = opt.match(/^(?:-a|--action)=?(.*)$/)) {
-        if (currentInput.type !== undefined) throw 'duplicate --action arguments';
+        if (currentInput.action !== undefined) throw 'duplicate --action arguments';
         currentInput.action = getArg(m);
     } else if (m = opt.match(/^(?:-o|--output-file)=?(.*)$/)) {
         if (outputPath !== undefined) throw 'duplicate --output-file arguments';
