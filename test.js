@@ -283,14 +283,12 @@ test('Packer with very high order context', t => {
     t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [512] }), 23);
 });
 
-test('Packer with high entropy', t => {
+test('Packer with high entropy', t => { // also test long inputs
     let data = '';
-    for (let i = 0; i < (1 << 8); ++i) {
+    for (let i = 0; i < (1 << 6); ++i) {
         data += String.fromCharCode(...crypto.randomBytes(1 << 12));
     }
-    // we've got 1 MB of random data, which can't be really compressed
-    const packer = new Packer([{ type: 'text', action: 'write', data }], { maxMemoryMB: 10, sparseSelectors: [0] });
-    packer.makeDecoder();
-    t.pass();
+    // we've got 256 KB of random data, which can't be really compressed
+    t.is(packAndEval(data, { type: 'text', action: 'return', sparseSelectors: [0] }), data);
 });
 

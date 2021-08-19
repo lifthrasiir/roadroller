@@ -520,6 +520,10 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
 const predictionBytesPerContext = options => (options.precision <= 8 ? 1 : options.precision <= 16 ? 2 : 4);
 const countBytesPerContext = options => (options.modelMaxCount < 128 ? 1 : options.modelMaxCount < 32768 ? 2 : 4);
 
+// String.fromCharCode(...array) is short but doesn't work when array.length is "long enough".
+// the threshold is implementation-defined, but 2^16 - epsilon seems common.
+const TEXT_DECODER_THRESHOLD = 65000;
+
 export class Packer {
     constructor(inputs, options = {}) {
         options.sparseSelectors = options.sparseSelectors || defaultSparseSelectors();
@@ -594,7 +598,7 @@ export class Packer {
 
     static prepareText(inputs) {
         let text = inputs.map(input => input.data).join('');
-        if (text.match(/[\u0100-\uffff]/)) {
+        if (text.length >= TEXT_DECODER_THRESHOLD || text.match(/[\u0100-\uffff]/)) {
             return { utf8: true, text: unescape(encodeURIComponent(text)) };
         } else {
             return { utf8: false, text };
@@ -795,6 +799,14 @@ export class Packer {
         const singleDigitSelectors = sparseSelectors.every(sel => sel < 512);
         const quotes = [...model.quotesSeen].sort((a, b) => a - b);
 
+        const stringifiedInput = utf8 =>
+            // if the input length crosses the threshold,
+            // the input is either forced to be encoded in UTF-8
+            // or (in the case of JS inputs) always in ASCII thus can be decoded as UTF-8.
+            utf8 || inputLength >= TEXT_DECODER_THRESHOLD ?
+                `new TextDecoder().decode(new Uint8Array(z))` :
+                `String.fromCharCode(...z)`;
+
         // \0 is technically allowed by JS but can't appear in <script>
         const escapeCharInTemplate = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', '`': '\\`' })[c] || c;
         const escapeCharInCharClass = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', ']': '\\]' })[c] || c;
@@ -952,18 +964,14 @@ export class Packer {
         const [input] = this.inputsByType.text || this.inputsByType.js;
         switch (input.type) {
             case 'text':
-                if (this.preparedText.utf8) {
-                    outputVar = `c=w=decodeURIComponent(escape(String.fromCharCode(...z)))`;
-                } else {
-                    outputVar = `c=w=String.fromCharCode(...z)`;
-                }
+                outputVar = stringifiedInput(this.preparedText.utf8);
                 break;
 
             case 'js':
                 if (this.preparedJs.abbrs.length === 0) {
-                    outputVar = `c=w=String.fromCharCode(...z)`;
+                    outputVar = `c=w=${stringifiedInput()}`;
                 } else if (this.preparedJs.abbrs.length < 3) {
-                    secondLine += `c=w=String.fromCharCode(...z);`;
+                    secondLine += `c=w=${stringifiedInput()};`;
                     for (const [, abbr] of this.preparedJs.abbrs) {
                         secondLine += `with(c.split(\`${escapeCharInTemplate(abbr)}\`))c=join(shift());`;
                     }
@@ -973,7 +981,7 @@ export class Packer {
                     const abbrCharClass1 = makeCharClass(abbrCharSet, true);
                     const abbrCharClass2 = makeCharClass(abbrCharSet, false);
                     const abbrCharClass = (abbrCharClass2.length < abbrCharClass1.length ? abbrCharClass2 : abbrCharClass1);
-                    secondLine += `for(c=String.fromCharCode(...z);w=/[${abbrCharClass}]/.exec(c);)with(c.split(w))c=join(shift());`;
+                    secondLine += `for(c=${stringifiedInput()};w=/[${abbrCharClass}]/.exec(c);)with(c.split(w))c=join(shift());`;
                 }
                 break;
         }
