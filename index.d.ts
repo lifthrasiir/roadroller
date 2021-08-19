@@ -34,15 +34,9 @@ export class AnsDecoder {
 export interface Model {
     predict(context?: number): ScaledFreq;
     update(actualBit: Bit, context?: number): void;
+    flushByte(currentByte: number, inBits: number): void;
     release?(): void;
 }
-
-export interface BytewiseModel extends Model {
-    updateByte(currentByte: number): void;
-}
-
-export function BytewiseModelMixin<Base extends new (...args: unknown[]) => Model>(base: Base):
-    new (inBits: number, ...args: ConstructorParameters<Base>) => Base & BytewiseModel;
 
 export interface DirectContextModelOptions {
     inBits: number;
@@ -56,6 +50,7 @@ export class DirectContextModel implements Model {
     constructor(options: DirectContextModelOptions);
     predict(context?: number): ScaledFreq;
     update(actualBit: Bit, context?: number): void;
+    flushByte(currentByte: number, inBits: number): void;
     release(): void;
 }
 
@@ -63,11 +58,11 @@ export interface SparseContextModelOptions extends DirectContextModelOptions {
     sparseSelector: number;
 }
 
-export class SparseContextModel implements BytewiseModel {
+export class SparseContextModel implements DirectContextModel {
     constructor(options: SparseContextModelOptions);
     predict(context?: number): ScaledFreq;
     update(actualBit: Bit, context?: number): void;
-    updateByte(currentByte: number): void;
+    flushByte(currentByte: number, inBits: number): void;
     release(): void;
 }
 
@@ -81,6 +76,7 @@ export class LogisticMixModel implements Model {
     constructor(models: Model[], options: LogisticMixModelOptions);
     predict(context?: number): ScaledFreq;
     update(actualBit: Bit, context?: number): void;
+    flushByte(currentByte: number, inBits: number): void;
     release(): void;
 }
 
@@ -89,11 +85,11 @@ export interface DefaultModelOptions extends DirectContextModelOptions, Logistic
     modelQuotes: boolean;
 }
 
-export class DefaultModel implements BytewiseModel {
+export class DefaultModel implements LogisticMixModel {
     constructor(options: DefaultModelOptions);
     predict(context?: number): ScaledFreq;
     update(actualBit: Bit, context?: number): void;
-    updateByte(currentByte: number): void;
+    flushByte(currentByte: number, inBits: number): void;
     release(): void;
 
     readonly quitesSeen: Set<number>;

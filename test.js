@@ -89,10 +89,13 @@ testAnsRoundtrip(8, 12);
 //------------------------------------------------------------------------------
 
 class SimpleModel {
-    constructor({ inBits, precision }) {
+    constructor(t, { inBits, precision }) {
+        this.t = t;
         this.inBits = inBits;
         this.precision = precision;
         this.ones = this.zeroes = 1;
+        this.bitsSinceFlush = 0;
+        this.numBitsSinceFlush = 0;
     }
 
     predict() {
@@ -105,9 +108,23 @@ class SimpleModel {
         } else {
             ++this.zeroes;
         }
+        this.bitsSinceFlush = (this.bitsSinceFlush << 1) | actualBit;
+        ++this.numBitsSinceFlush;
+        this.t.assert(this.numBitsSinceFlush <= this.inBits);
     }
 
-    check(t, input) {
+    flushByte(currentByte, inBits) {
+        this.t.is(inBits, this.inBits);
+        this.t.is(inBits, this.numBitsSinceFlush);
+        this.t.is(currentByte, this.bitsSinceFlush);
+        this.numBitsSinceFlush = 0;
+        this.bitsSinceFlush = 0;
+    }
+
+    check(input) {
+        this.t.is(this.numBitsSinceFlush, 0);
+        this.t.is(this.bitsSinceFlush, 0);
+
         let actualOnes = 0;
         let actualZeroes = 0;
         for (const v of input) {
@@ -115,14 +132,14 @@ class SimpleModel {
                 if ((v >> i) & 1) ++actualOnes; else ++actualZeroes;
             }
         }
-        t.is(this.ones, actualOnes + 1);
-        t.is(this.zeroes, actualZeroes + 1);
+        this.t.is(this.ones, actualOnes + 1);
+        this.t.is(this.zeroes, actualZeroes + 1);
     }
 }
 
 class SimpleModelWithRelease extends SimpleModel {
-    constructor(options) {
-        super(options);
+    constructor(t, options) {
+        super(t, options);
         this.released = false;
     }
 
@@ -131,9 +148,9 @@ class SimpleModelWithRelease extends SimpleModel {
         this.released = true;
     }
 
-    check(t, input) {
-        super.check(t, input);
-        t.assert(this.released);
+    check(input) {
+        super.check(input);
+        this.t.assert(this.released);
     }
 }
 
@@ -146,19 +163,19 @@ function testCompressWithModel(input, inputDesc, expectedCompressedSize, modelCl
         const options = { inBits: 8, outBits: 8, precision: 12 };
         let model;
 
-        model = new modelClass(options);
+        model = new modelClass(t, options);
         const compressed = compressWithModel(input, model, options);
         t.assert(compressed.buf.every(v => 0 <= v && v < (1 << options.outBits)));
-        model.check(t, input);
+        model.check(input);
 
         t.assert(
             Math.abs(expectedCompressedSize - compressed.buf.length) < 100,
             `compressed size deviates (expected ${expectedCompressedSize}, actual ${compressed.buf.length})`);
 
-        model = new modelClass(options);
+        model = new modelClass(t, options);
         const decompressed = decompressWithModel(compressed, model, options);
         t.deepEqual(decompressed, input);
-        model.check(t, input);
+        model.check(input);
     });
 }
 

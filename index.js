@@ -178,33 +178,6 @@ export class AnsDecoder {
 
 //------------------------------------------------------------------------------
 
-export const BytewiseModelMixin = base => class extends base {
-    constructor(inBits, ...args) {
-        super(...args);
-        this.inBits = inBits;
-        this.bitCount = 0;
-        this.currentByte = 0;
-    }
-
-    predict(context) {
-        return super.predict(context);
-    }
-
-    update(actualBit, context) {
-        super.update(actualBit, context);
-
-        this.currentByte = (this.currentByte << 1) | actualBit;
-        if (++this.bitCount === this.inBits) {
-            this.updateByte(this.currentByte);
-            this.bitCount = this.currentByte = 0;
-        }
-    }
-
-    updateByte(currentByte) {
-        if (super.updateByte) super.updateByte(currentByte);
-    }
-};
-
 export class DirectContextModel {
     constructor({ inBits, contextBits, precision, modelMaxCount, arrayBufferPool }) {
         this.inBits = inBits;
@@ -249,9 +222,10 @@ export class DirectContextModel {
         this.predictions[context] += (delta / (2 * this.counts[context] + 1) | 0) >> (29 - this.precision);
 
         this.bitContext = (this.bitContext << 1) | actualBit;
-        if ((this.bitContext >> this.inBits) > 0) {
-            this.bitContext = 1;
-        }
+    }
+
+    flushByte() {
+        this.bitContext = 1;
     }
 
     release() {
@@ -264,9 +238,9 @@ export class DirectContextModel {
     }
 }
 
-export class SparseContextModel extends BytewiseModelMixin(DirectContextModel) {
+export class SparseContextModel extends DirectContextModel {
     constructor(options) {
-        super(options.inBits, options);
+        super(options);
 
         this.selector = options.sparseSelector;
         this.recentBytes = [];
@@ -284,8 +258,8 @@ export class SparseContextModel extends BytewiseModelMixin(DirectContextModel) {
         super.update(actualBit, this.sparseContext + context);
     }
 
-    updateByte(currentByte) {
-        super.updateByte(currentByte);
+    flushByte(currentByte, inBits) {
+        super.flushByte(currentByte, inBits);
 
         this.recentBytes.unshift(currentByte);
         this.recentBytes.pop();
@@ -350,6 +324,12 @@ export class LogisticMixModel {
         }
     }
 
+    flushByte(currentByte, inBits) {
+        for (const model of this.models) {
+            model.flushByte(currentByte, inBits);
+        }
+    }
+
     release() {
         for (const model of this.models) {
             if (model.release) model.release();
@@ -359,13 +339,13 @@ export class LogisticMixModel {
 
 //------------------------------------------------------------------------------
 
-export class DefaultModel extends BytewiseModelMixin(LogisticMixModel) {
+export class DefaultModel extends LogisticMixModel {
     constructor(options) {
         const { inBits, sparseSelectors, modelQuotes } = options;
         const models = sparseSelectors.map(sparseSelector => {
             return new SparseContextModel({ sparseSelector, ...options });
         });
-        super(inBits, models, options);
+        super(models, options);
 
         this.modelQuotes = modelQuotes;
         this.quote = 0;
@@ -382,8 +362,8 @@ export class DefaultModel extends BytewiseModelMixin(LogisticMixModel) {
         super.update(actualBit, context);
     }
 
-    updateByte(currentByte) {
-        super.updateByte(currentByte);
+    flushByte(currentByte, inBits) {
+        super.flushByte(currentByte, inBits);
 
         if (this.modelQuotes) {
             if (this.quote && this.quote === currentByte) {
@@ -415,6 +395,7 @@ export function compressWithModel(input, model, options) {
             encoder.writeBit(bit, prob);
             model.update(bit);
         }
+        model.flushByte(code, inBits);
         if (calculateByteEntropy) {
             byteProbs.push(byteProb);
         }
@@ -445,6 +426,7 @@ export function decompressWithModel({ state, buf, inputLength }, model, options)
             current = (current << 1) | actualBit;
             model.update(actualBit);
         }
+        model.flushByte(current, inBits);
         reconstructed.push(current);
     }
 
@@ -946,7 +928,7 @@ export class Packer {
 
         switch (input.action) {
             case 'eval':
-                // TODO is it significant slower than the indirect eval `(0,eval)`?
+                // TODO is it significantly slower than the indirect eval `(0,eval)`?
                 secondLine += `eval(${outputVar})`;
                 break;
             case 'write':
