@@ -545,7 +545,7 @@ export class Packer {
             if (!['js', 'glsl', 'html', 'text', 'binary'].includes(type)) {
                 throw new Error('Packer: unknown input type');
             }
-            if (!['eval', 'json', 'string', 'write', 'console', 'array', 'u8array', 'base64'].includes(action)) {
+            if (!['eval', 'json', 'string', 'write', 'console', 'return', 'array', 'u8array', 'base64'].includes(action)) {
                 throw new Error('Packer: unknown input action');
             }
             if (typeof data === 'string' && type === 'binary') {
@@ -571,7 +571,7 @@ export class Packer {
         }
 
         // TODO
-        if (inputs.length !== 1 || !['js', 'text'].includes(inputs[0].type) || !['eval', 'write', 'console'].includes(inputs[0].action)) {
+        if (inputs.length !== 1 || !['js', 'text'].includes(inputs[0].type) || !['eval', 'write', 'console', 'return'].includes(inputs[0].action)) {
             throw new Error('Packer: this version of Roadroller supports exactly one JS or text input, please stay tuned for more!');
         }
     }
@@ -991,6 +991,9 @@ export class Packer {
                 break;
             case 'console': // undocumented, mainly used for debugging
                 secondLine += `console.log(${outputVar})`;
+                break;
+            case 'return': // undocumented, mainly used for debugging
+                secondLine += outputVar;
                 break;
         }
 

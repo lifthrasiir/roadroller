@@ -248,7 +248,9 @@ test('prepareJs without abbrs', t => {
 //------------------------------------------------------------------------------
 
 function packAndEval(data, options = {}) {
-    const packer = new Packer([{ type: 'js', action: 'eval', data }], { maxMemoryMB: 10, ...options });
+    const type = options.type || 'js';
+    const action = options.action || 'eval';
+    const packer = new Packer([{ type, action, data }], { maxMemoryMB: 10, ...options });
     const { firstLine, secondLine } = packer.makeDecoder();
 
     // XXX this is only okay-ish because we know the decoder internals
@@ -259,6 +261,7 @@ function packAndEval(data, options = {}) {
 
 test('Packer', t => {
     t.is(packAndEval('3 + 4 * 5'), 23);
+    t.is(packAndEval('3 + 4 * 5', { action: 'return' }), '3+4*5');
 
     // abbreviation tests
     t.is(packAndEval(`
