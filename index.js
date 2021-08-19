@@ -320,10 +320,7 @@ export class LogisticMixModel {
 
         // since CM is the last model and predictions are not stored,
         // we can just compute the external probability directly.
-        const mixedProb = (2 << this.precision) / (1 + Math.exp(-total));
-        if (mixedProb >= (2 << this.precision)) {
-            throw new Error('LogisticMixModel.predict: weighted average overflow');
-        }
+        const mixedProb = ((2 << this.precision) - 1) / (1 + Math.exp(-total));
         this.mixedProb = mixedProb | 1;
 
         // this adjustment can be combined and elided in the optimized decompressor
@@ -848,7 +845,7 @@ export class Packer {
             // t: rANS state
             // w: weights
             // p: predictions
-            // c: counts
+            // c: counts * 2 + 1
             `t=${state};` +
             `M=1<<${precision + 1};` +
             `w=${JSON.stringify(Array(numModels).fill(0))};` +
@@ -936,7 +933,7 @@ export class Packer {
                 `)),` +
 
                 // q: squash(sum of weighted preds) followed by adjustment
-                `q=M/(1+Math.exp(q))|1,` +
+                `q=~-M/(1+Math.exp(q))|1,` +
                 // decode the bit b
                 `b=t%M<q,` +
                 `t=(b?q:M-q)*(t>>${precision + 1})+t%M-!b*q` +
