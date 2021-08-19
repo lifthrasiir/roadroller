@@ -182,9 +182,29 @@ if (inputs.length === 0) {
 if (optimize === undefined) optimize = 0;
 if (outputPath === undefined) outputPath = '-';
 
-const packer = new Packer(inputs, options);
+let packer = new Packer(inputs, options);
 
 if (optimize) {
+    const { firstLineLengthInBytes, secondLine } = packer.makeDecoder();
+    const origSize = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
+    if (!silent) console.warn(`original size:`, origSize);
+
+    // the js input can be freely changed to the text, see if it fares better
+    let preferText = false;
+    if (inputs[0].type === 'js') {
+        const inputs2 = JSON.parse(JSON.stringify(inputs));
+        inputs2[0].type = 'text';
+        const textPacker = new Packer(inputs2, options);
+        const { firstLineLengthInBytes, secondLine } = textPacker.makeDecoder();
+        const textSize = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
+
+        if (textSize < origSize) {
+            if (!silent) console.warn(`switch the JS input to the text:`, textSize);
+            packer = textPacker;
+            preferText = true;
+        }
+    }
+
     const result = await packer.optimizeSparseSelectors(info => {
         if (silent) return;
         console.warn(
@@ -192,7 +212,10 @@ if (optimize) {
             info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
     });
     if (!silent) {
-        console.warn(`search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ${JSON.stringify(result.best)}:`, result.bestSize);
+        console.warn(
+            `search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ` +
+            `use \`${preferText ? '-t text ' : ''}-S ${result.best.join(',')}\` to replicate:`,
+            result.bestSize);
     }
 }
 
