@@ -593,7 +593,7 @@ export class Packer {
         this.options.inBits = this.combinedInput.every(c => c <= 0x7f) ? 7 : 8;
         this.options.outBits = 6;
         // TODO again, this should be controlled dynamically
-        this.options.modelQuotes = this.preparedJs.length > 0;
+        this.options.modelQuotes = this.preparedJs.code.length > 0;
     }
 
     static prepareText(inputs) {
