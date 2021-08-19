@@ -128,7 +128,7 @@ export interface OptimizerResult {
     bestSize: number[];
 }
 
-export function defaultSparseSelectors(): number[];
+export function defaultSparseSelectors(numContexts?: number): number[];
 export function optimizeSparseSelectors(
     selectors: number[],
     calculateSize: (selectors: number[]) => number,

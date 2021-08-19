@@ -157,12 +157,7 @@ for (let i = 2; i < process.argv.length; ++i) {
         if (arg.match(/^x[0-9]+$/)) {
             const numContexts = parseInt(arg.substr(1), 10);
             if (numContexts > 64) throw 'too many selectors in --selectors argument';
-            selectors = defaultSparseSelectors().slice(0, numContexts);
-            while (selectors.length < numContexts) {
-                const added = Math.random() * 512 | 0;
-                if (!selectors.includes(added)) selectors.push(added);
-            }
-            selectors.sort((a, b) => a - b);
+            selectors = defaultSparseSelectors(numContexts);
         } else {
             selectors = arg.split(/,/g).map(v => parseInt(v, 10)).sort((a, b) => a - b);
             if (selectors.length > 64) throw 'too many selectors in --selectors argument';

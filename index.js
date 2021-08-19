@@ -453,10 +453,25 @@ export const decompressWithModel = ({ state, buf, inputLength }, model, options)
 
 //------------------------------------------------------------------------------
 
-// this was determined from running optimizeSparseSelectors([]) against samples,
-// where selectors are limited to 0..63 for more thorough search.
-// these were most frequent sparse orders and should be a good baseline.
-export const defaultSparseSelectors = () => [0, 1, 2, 3, 6, 7, 13, 21, 25, 42, 50, 57];
+// we do not automatically search beyond 9th order for the simpler decoder code
+const AUTO_SELECTOR_LIMIT = 512;
+
+export const defaultSparseSelectors = (numContexts = 12) => {
+    numContexts = Math.max(0, Math.min(64, numContexts));
+
+    // this was determined from running optimizeSparseSelectors([]) against samples,
+    // where selectors are limited to 0..63 for more thorough search.
+    // these were most frequent sparse orders and should be a good baseline.
+    const selectors = [0, 1, 2, 3, 6, 7, 13, 21, 25, 42, 50, 57].slice(0, numContexts);
+
+    // if more contexts are desired we just add random selectors.
+    while (selectors.length < numContexts) {
+        const added = Math.random() * AUTO_SELECTOR_LIMIT | 0;
+        if (!selectors.includes(added)) selectors.push(added);
+    }
+
+    return selectors.sort((a, b) => a - b);
+};
 
 export const optimizeSparseSelectors = async (selectors, calculateSize, progress) => {
     let current = selectors.slice();
@@ -472,7 +487,7 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
 
         let added;
         do {
-            added = Math.random() * 512 | 0;
+            added = Math.random() * AUTO_SELECTOR_LIMIT | 0;
         } while (current.includes(added));
         current[Math.random() * current.length | 0] = added;
         current.sort((a, b) => a - b);
