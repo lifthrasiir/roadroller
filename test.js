@@ -266,8 +266,9 @@ function packAndReturn(data, options = {}) {
 test('Packer', t => {
     t.is(packAndEval('3 + 4 * 5'), 23);
     t.is(packAndReturn('3 + 4 * 5'), '3+4*5');
+});
 
-    // abbreviation tests
+test('abbreviations', t => {
     t.is(packAndEval(`
         const alpha = 42;
         alpha + alpha + alpha + alpha + alpha
@@ -280,8 +281,9 @@ test('Packer', t => {
         const alpha = 42, beta = 54, gamma = 13;
         (alpha + alpha + alpha + alpha + alpha) * (beta + beta + beta + beta) * (gamma + gamma + gamma)
     `), 42 * 5 * 54 * 4 * 13 * 3);
+});
 
-    // reescape tests
+test('reescaping', t => {
     t.is(packAndReturn('"asdf\'asdf"'), '"asdf\'asdf"');
     t.is(packAndReturn('"asdf\\"asdf"'), '"asdf\\x22asdf"');
     t.is(packAndReturn('"asdf\\\'asdf"'), '"asdf\\\'asdf"');
@@ -299,6 +301,14 @@ test('Packer', t => {
     t.is(packAndReturn('/[\\\'\\"\\`]/g'), '/[\\x27\\x22\\x60]/g');
 });
 
+const LONG_ENOUGH_INPUT = 100000; // ...so that an alternative code path is triggered
+
+test('Packer with long inputs', t => {
+    t.is(packAndEval(';'.repeat(LONG_ENOUGH_INPUT) + '42', { sparseSelectors: [0] }), 42);
+    t.is(packAndEval(';'.repeat(LONG_ENOUGH_INPUT) + '"×"', { sparseSelectors: [0] }), '×');
+    t.is(packAndEval(';'.repeat(LONG_ENOUGH_INPUT) + '"ㅋ"', { sparseSelectors: [0] }), 'ㅋ');
+});
+
 test('Packer with very high order context', t => {
     t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [511] }), 23);
     t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [512] }), 23);
@@ -306,10 +316,10 @@ test('Packer with very high order context', t => {
 
 test('Packer with high entropy', t => { // also test long inputs
     let data = '';
-    for (let i = 0; i < (1 << 6); ++i) {
+    while (data.length < LONG_ENOUGH_INPUT) {
         data += String.fromCharCode(...crypto.randomBytes(1 << 12));
     }
-    // we've got 256 KB of random data, which can't be really compressed
+    // we've got 100 KB of random data, which can't be really compressed
     t.is(packAndReturn(data, { type: 'text', sparseSelectors: [0] }), data);
 });
 

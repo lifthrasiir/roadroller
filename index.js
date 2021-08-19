@@ -675,7 +675,7 @@ export class Packer {
                     .replace(/\r\n?/g, '\n')
                     // identifiers in addition to string literals can be escaped in JS code.
                     // those characters can't appear anywhere else, so this doesn't alter the validity.
-                    .replace(/[^\n\x20-\xff]/g, m => '\\u' + m.charCodeAt(0).toString(16).padStart(4, '0'));
+                    .replace(/[^\n\x20-\x7f]/g, m => '\\u' + m.charCodeAt(0).toString(16).padStart(4, '0'));
 
                 tokens.push(token);
             }
