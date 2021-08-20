@@ -686,7 +686,9 @@ export class Packer {
 
         const unseenChars = new Set();
         for (let i = 0; i < 128; ++i) {
-            if (![34, 39, 96].includes(i)) unseenChars.add(String.fromCharCode(i));
+            // even though there might be no whitespace in the tokens,
+            // we may have to need some space between two namelike tokens later.
+            if (![32, 34, 39, 96].includes(i)) unseenChars.add(String.fromCharCode(i));
         }
         for (const input of inputs) {
             for (const token of input.tokens) {
@@ -832,7 +834,7 @@ export class Packer {
 
         // \0 is technically allowed by JS but can't appear in <script>
         const escapeCharInTemplate = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', '`': '\\`' })[c] || c;
-        const escapeCharInCharClass = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', ']': '\\]' })[c] || c;
+        const escapeCharInCharClass = c => ({ '\0': '\\0', '\r': '\\r', '\n': '\\n', '\\': '\\\\', ']': '\\]' })[c] || c;
 
         const makeCharClass = (set, toggle) => {
             const ranges = [];

@@ -281,6 +281,13 @@ test('abbreviations', t => {
         const alpha = 42, beta = 54, gamma = 13;
         (alpha + alpha + alpha + alpha + alpha) * (beta + beta + beta + beta) * (gamma + gamma + gamma)
     `), 42 * 5 * 54 * 4 * 13 * 3);
+
+    // any number of abbreviations should work
+    const names = [];
+    for (const c of 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$') {
+        names.push(c.repeat(5));
+        t.is(packAndEval(`let ${(names.join(',') + ';').repeat(5)}${names.length}`), names.length);
+    }
 });
 
 test('reescaping', t => {
