@@ -249,10 +249,32 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
     }
 }
 
-const parsed = await parseArgs(process.argv.slice(2));
+let parsed;
+try {
+    parsed = await parseArgs(process.argv.slice(2));
+} catch (e) {
+    if (typeof e === 'string') {
+        console.warn(`Error: ${e}`);
+        process.exit(1);
+    }
+    throw e;
+}
+
 switch (parsed.command) {
     case 'compress':
-        await compress(parsed);
+        try {
+            await compress(parsed);
+        } catch (e) {
+            // correctly format known classes of errors
+            if (e instanceof Error) {
+                const m = e.message.match(/^Packer: (.*)$/);
+                if (m) {
+                    console.warn(`Error: ${m[1]}`);
+                    process.exit(1);
+                }
+            }
+            throw e;
+        }
         break;
 
     case 'usage':
