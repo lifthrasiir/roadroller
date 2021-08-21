@@ -119,36 +119,41 @@ async function parseArgs(args) {
             continue;
         }
 
+        const matchOpt = (long, short) =>
+            opt === '--' + long || (short && opt === '-' + short);
+        const matchOptArg = (long, short) =>
+            opt.match(new RegExp(`^(?:--${long}|(?:--${long}=${short ? `|-${short}=?` : ''})(.*))$`));
         const getArg = m => {
             if (m[1]) return m[1];
             if (++i >= args.length) throw `invalid ${opt} argument`;
             return args[i];
         };
+
         let m;
-        if (opt.match(/^(?:-h|--help)$/)) {
+        if (matchOpt('help', 'h')) {
             return { command: 'usage' };
-        } else if (opt.match(/^(?:-V|--version)$/)) {
+        } else if (matchOpt('version', 'V')) {
             return { command: 'version' };
-        } else if (opt.match(/^(?:-q|--silent)$/)) {
+        } else if (matchOpt('silent', 'q')) {
             silent = true;
-        } else if (m = opt.match(/^(?:-t|--type)=?(.*)$/)) {
+        } else if (m = matchOptArg('type', 't')) {
             if (currentInput.type !== undefined) throw 'duplicate --type arguments';
             currentInput.type = getArg(m);
-        } else if (m = opt.match(/^(?:-a|--action)=?(.*)$/)) {
+        } else if (m = matchOptArg('action', 'a')) {
             if (currentInput.action !== undefined) throw 'duplicate --action arguments';
             currentInput.action = getArg(m);
-        } else if (m = opt.match(/^(?:-o|--output-file)=?(.*)$/)) {
+        } else if (m = matchOptArg('output-file', 'o')) {
             if (outputPath !== undefined) throw 'duplicate --output-file arguments';
             outputPath = getArg(m);
-        } else if (m = opt.match(/^(?:-O|--optimize)=?(.*)$/)) {
+        } else if (m = matchOptArg('optimize', 'O')) {
             if (optimize !== undefined) throw 'duplicate --optimize arguments';
             optimize = Number(getArg(m));
             if (optimize !== 0 && optimize !== 1) throw 'invalid --optimize argument';
-        } else if (m = opt.match(/^(?:-M|--max-memory)=?(.*)$/)) {
+        } else if (m = matchOptArg('max-memory', 'M')) {
             if (options.maxMemoryMB !== undefined) throw 'duplicate --max-memory arguments';
             options.maxMemoryMB = parseInt(getArg(m), 10);
             if (!(10 <= options.maxMemoryMB && options.maxMemoryMB <= 1024)) throw 'invalid --max-memory argument';
-        } else if (m = opt.match(/^(?:-S|--selectors)=?(.*)$/)) {
+        } else if (m = matchOptArg('selectors', 'S')) {
             if (options.sparseSelectors !== undefined) throw 'duplicate --max-memory arguments';
             const arg = getArg(m);
             let selectors;
