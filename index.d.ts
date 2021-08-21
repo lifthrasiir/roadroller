@@ -112,19 +112,19 @@ export interface OutputExtra extends Output {
 export function compressWithModel(input: ArrayLike<number>, model: Model, options: CompressOptions): OutputExtra;
 export function decompressWithModel(output: Output, model: Model, options: CompressOptions): number[];
 
-export interface OptimizerProgressInfo {
+export interface OptimizerProgressInfo<Params = number[]> {
     temperature: number;
-    current: number[];
+    current: Params;
     currentSize: number;
     currentRejected: boolean;
-    best: number[];
+    best: Params;
     bestSize: number[];
     bestUpdated: boolean;
 }
 
-export interface OptimizerResult {
+export interface OptimizerResult<Params = number[]> {
     elapsedMsecs: number;
-    best: number[];
+    best: Params;
     bestSize: number[];
 }
 
@@ -132,8 +132,8 @@ export function defaultSparseSelectors(numContexts?: number): number[];
 export function optimizeSparseSelectors(
     selectors: number[],
     calculateSize: (selectors: number[]) => number,
-    progress?: (info: OptimizerProgressInfo) => undefined | boolean | Promise<undefined | boolean>,
-): Promise<OptimizerResult>;
+    progress?: (info: OptimizerProgressInfo<number[]>) => undefined | boolean | Promise<undefined | boolean>,
+): Promise<OptimizerResult<number[]>>;
 
 export const enum InputType {
     JS = 'js',
@@ -162,6 +162,7 @@ export interface Input {
 export interface PackerOptions {
     sparseSelectors?: number[];
     maxMemoryMB?: number;
+    contextBits?: number;
     precision?: number;
     modelMaxCount?: number;
     arrayBufferPool?: ArrayBufferPool;
@@ -174,8 +175,8 @@ export class Packer {
     readonly memoryUsageMB: number;
     makeDecoder(): Packed;
     optimizeSparseSelectors(
-        progress?: (info: OptimizerProgressInfo) => undefined | boolean | Promise<undefined | boolean>,
-    ): Promise<OptimizerResult>;
+        progress?: (info: OptimizerProgressInfo<number[]>) => undefined | boolean | Promise<undefined | boolean>,
+    ): Promise<OptimizerResult<number[]>>;
 }
 
 export interface Packed {
