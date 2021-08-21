@@ -10,7 +10,7 @@ try {
 } catch (e) {
 }
 
-function usage() {
+function usage(verbose) {
     console.warn(`\
      ____                                                     ___
      /    )                   /              /  /            |   |
@@ -53,7 +53,8 @@ Output options:
   Sets the maximum number of contexts used, prefixed by a literal "x".
   For 13+ contexts additional contexts are randomly picked.
   Can be used for finer (linear) tuning of the memory usage.
--S|--selectors SELECTOR,SELECTOR... [Default: ${defaultSparseSelectors()}]
+` + (verbose > 0 ?
+`-S|--selectors SELECTOR,SELECTOR... [Default: ${defaultSparseSelectors()}]
   Sets the explicit contexts to be used.
   Each number designates bytes to be used as a context for that model;
   if K-th (K>0) lowest bit is set the context uses the K-th-to-last byte,
@@ -74,14 +75,14 @@ Output options:
   smaller COUNT is better for quickly varying (non-stationary) inputs.
 -Zpr|--precision BITS [Range: 1..21, Default: 16]
   Sets the precision of internal fixed point representations.
-
+` : '') + `
 Other options:
 -q|--silent
   Suppresses any diagnostic messages.
 -v|--verbose
   Prints more information whenever appropriate. Can be repeated.
 -h|--help
-  Prints this message.
+  Prints this message. Combine with -v for more options.
 -V|--version
   Prints the version.
 
@@ -103,6 +104,7 @@ async function parseArgs(args) {
     const options = {
         arrayBufferPool: new ArrayBufferPool(),
     };
+    let command;
     let optimize;
     let outputPath;
     let nextIsArg = false;
@@ -152,9 +154,9 @@ async function parseArgs(args) {
 
         let m;
         if (matchOpt('help', 'h')) {
-            return { command: 'usage' };
+            command = 'usage';
         } else if (matchOpt('version', 'V')) {
-            return { command: 'version' };
+            command = 'version';
         } else if (matchOpt('silent', 'q')) {
             if (verbose > 0) throw '-q and -v cannot be used together';
             verbose = -1;
@@ -240,8 +242,12 @@ async function parseArgs(args) {
     }
 
     if (inputs.length === 0) {
-        return { command: 'default' };
+        command = 'default';
     }
+    if (command) {
+        return { command, verbose };
+    }
+
     if (optimize === undefined) optimize = 0;
     if (outputPath === undefined) outputPath = '-';
 
@@ -339,7 +345,7 @@ switch (parsed.command) {
         break;
 
     case 'usage':
-        usage();
+        usage(parsed.verbose);
         process.exit(0);
 
     case 'version':
@@ -347,7 +353,7 @@ switch (parsed.command) {
         process.exit(0);
 
     default:
-        usage();
+        usage(parsed.verbose);
         process.exit(1);
 }
 
