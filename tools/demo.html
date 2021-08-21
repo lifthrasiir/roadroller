@@ -101,13 +101,16 @@ input[type=number] { width: 5em; }
 <aside id=$outputmessage></aside>
 <footer><ul>
 <li><!--<label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a></label> --><button id=$optimizecontexts>Optimize contexts</button> <a href=#optimize-contexts title=Help>ℹ️</a>
-<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$estimatedmemory>144</span> MB estimated) <a href=#max-memory title=Help>ℹ️</a>
-</ul><!--<details><summary>Advanced configuration</summary><ul>
-<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>
-<li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+) value=> <a href=#chosen-contexts title=Help>ℹ️</a>
-<li><label>Learning rate: <input id=$learningrate pattern=\d+/\d+ value=1/256> <a href=#learning-rate title=Help>ℹ️</a>
-<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size <a href=#uncompressed-only title=Help>ℹ️</a>
-</ul></details>--></footer>
+<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>144</span> MB in use) <a href=#max-memory title=Help>ℹ️</a>
+</ul><details><summary>Advanced configuration</summary><ul>
+<!--<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>-->
+<li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+)+ value=> <a href=#chosen-contexts title=Help>ℹ️</a>
+<li><label>Precision: <input id=$precision type=number value=16 min=1 max=21> <a href=#precision title=Help>ℹ️</a>
+<li><label>Learning rate: <input id=$learningrate type=number value=500 min=1 max=99999> <a href=#learning-rate title=Help>ℹ️</a>
+<li><label>Model max count: <input id=$modelmaxcount type=number value=5 min=1 max=32767> <a href=#model-max-count title=Help>ℹ️</a>
+<li><label>Number of abbreviations: <input id=$numabbrevs type=number value=64 min=0 max=64> <a href=#num-abbreviations title=Help>ℹ️</a>
+<!--<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size <a href=#uncompressed-only title=Help>ℹ️</a>-->
+</ul></details></footer>
 </fieldset>
 
 <main id=$demotext>
@@ -262,11 +265,12 @@ const makeInput = () => {
 };
 
 const initOutput = () => {
-    $maxmemory.oninput = () => {
-        const numContexts = 12; // TODO for now
-        $estimatedmemory.textContent = numContexts * 3 * 2**Math.floor(Math.log2($maxmemory.value / numContexts / 3));
-        refreshOutput();
-    };
+    $maxmemory.onchange = () => refreshOutput();
+    $selectors.onchange = () => refreshOutput();
+    $precision.onchange = () => refreshOutput();
+    $learningrate.onchange = () => refreshOutput();
+    $modelmaxcount.onchange = () => refreshOutput();
+    $numabbrevs.onchange = () => refreshOutput();
 
     $optimizecontexts.onclick = async () => {
         if (optimizing) return;
@@ -283,7 +287,6 @@ const initOutput = () => {
 
 let initialRefresh = true;
 let output = null;
-let lastSelectors;
 let refreshTicks = 0; // used to halt the computation when it becomes outdated
 let optimizing = false;
 
@@ -300,6 +303,7 @@ const compress = async optimize => {
     $output.classList.add('c$outdated');
     $outputmessage.textContent = '';
     $outputsize.textContent = 'waiting...';
+    $usedmemory.textContent = '-';
     $newwindow.hidden = true;
     output = null;
 
@@ -330,14 +334,39 @@ const compress = async optimize => {
         $outputsize.textContent = optimize ? 'optimizing...' : 'compressing...';
         await new Promise(resolve => setTimeout(resolve, 1));
 
+        let sparseSelectors;
+        if ($selectors.value.trim()) {
+            sparseSelectors = $selectors.value.split(/,/g).map(v => parseInt(v, 10)).sort((a, b) => a - b);
+            if (sparseSelectors.length < 1) throw 'no contexts';
+            if (sparseSelectors.length > 64) throw 'too many contexts';
+            if (sparseSelectors.some(sel => sel !== sel || sel < 0 || sel >= 0x80000000)) throw 'invalid context selector';
+            if (sparseSelectors.find((sel, i) => sparseSelectors[i-1] === sel)) throw 'duplicate context selectors';
+        } else {
+            sparseSelectors = defaultSparseSelectors();
+        }
+
+        const precision = parseInt($precision.value, 10);
+        if (!(1 <= precision && precision <= 28)) throw 'invalid precision';
+        const recipLearningRate = parseInt($learningrate.value, 10);
+        if (!(1 <= recipLearningRate && recipLearningRate <= 99999)) throw 'invalid learning rate';
+        const modelMaxCount = parseInt($modelmaxcount.value, 10);
+        if (!(1 <= modelMaxCount && modelMaxCount <= 32767)) throw 'invalid model max count';
+        const numAbbreviations = parseInt($numabbrevs.value, 10);
+        if (!(0 <= numAbbreviations && numAbbreviations <= 64)) throw 'invalid number of abbreviations';
+
         const options = {
             maxMemoryMB,
             arrayBufferPool,
-            sparseSelectors: (optimize && lastSelectors) || defaultSparseSelectors(),
+            sparseSelectors,
+            precision,
+            recipLearningRate,
+            modelMaxCount,
+            numAbbreviations,
         };
 
         let prefix = '';
         const packer = new Packer(inputs, options);
+        $usedmemory.textContent = packer.memoryUsageMB;
 
         if (optimize) {
             let tick = 0;
@@ -350,8 +379,10 @@ const compress = async optimize => {
                 await new Promise(resolve => requestAnimationFrame(resolve));
             });
             prefix = `optimized in ${(result.elapsedMsecs / 1000).toFixed(1)}s: `;
-            lastSelectors = result.best; // so that we can run optimize multiple times
+            sparseSelectors = result.best; // so that we can run optimize multiple times
         }
+
+        $selectors.value = sparseSelectors.join(',');
 
         const { firstLine, firstLineLengthInBytes, secondLine } = packer.makeDecoder();
         if (!optimize && lastRefreshTicks !== refreshTicks) return;
