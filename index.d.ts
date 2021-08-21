@@ -168,6 +168,7 @@ export interface PackerOptions {
     arrayBufferPool?: ArrayBufferPool;
     learningRateNum?: number;
     learningRateDenom?: number;
+    numAbbreviations?: number;
 }
 
 export class Packer {

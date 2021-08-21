@@ -543,6 +543,7 @@ export class Packer {
             learningRateDenom: options.learningRateDenom || 256,
             contextBits: options.contextBits,
             arrayBufferPool: options.arrayBufferPool,
+            numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
         };
         if (!this.options.contextBits) {
             const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
@@ -593,20 +594,6 @@ export class Packer {
         return ((this.options.sparseSelectors.length * bytesPerContext) << this.options.contextBits) / 1048576;
     }
 
-    prepare() {
-        if (this.combinedInput) return;
-
-        this.preparedText = Packer.prepareText(this.inputsByType.text || [], this.options);
-        this.preparedJs = Packer.prepareJs(this.inputsByType.js || [], this.options);
-        // TODO if we are to have multiple inputs they have to be splitted
-        this.combinedInput = [...this.preparedText.text, ...this.preparedJs.code].map(c => c.charCodeAt(0));
-
-        this.options.inBits = this.combinedInput.every(c => c <= 0x7f) ? 7 : 8;
-        this.options.outBits = 6;
-        // TODO again, this should be controlled dynamically
-        this.options.modelQuotes = this.preparedJs.code.length > 0;
-    }
-
     static prepareText(inputs) {
         let text = inputs.map(input => input.data).join('');
         if (text.length >= TEXT_DECODER_THRESHOLD || text.match(/[\u0100-\uffff]/)) {
@@ -616,7 +603,7 @@ export class Packer {
         }
     }
 
-    static prepareJs(inputs, { minFreqForAbbrs = 1 } = {}) {
+    static prepareJs(inputs, { numAbbreviations }) {
         // we strongly avoid a token like 'this\'one' because the context model doesn't
         // know about escapes and anything after that would be suboptimally compressed.
         // we can't still avoid something like `foo${`bar`}quux`, where `bar` would be
@@ -712,12 +699,14 @@ export class Packer {
         // and it's hard to calculate the actual compressed size beforehand.
         // therefore this should be rather thought as reducing the burden of context models.
         // (this is also why the full deduplication actually performs worse than no deduplication.)
-        const commonIdents = [...identFreqs.entries()]
-            .map(([ident, freq]) => [ident, ident.length * (freq - minFreqForAbbrs)])
+        let commonIdents = [...identFreqs.entries()]
+            .map(([ident, freq]) => [ident, ident.length * (freq - 1)])
             .filter(([, score]) => score > 0)
             .sort(([, a], [, b]) => b - a)
             .slice(0, usableChars.length)
             .map(([ident], i) => [ident, usableChars[i]]);
+        const maxAbbreviations = commonIdents.length;
+        commonIdents = commonIdents.slice(0, numAbbreviations);
         const identAbbrs = new Map(commonIdents);
 
         // construct the combined code with abbreviations replaced, inserting a whitespace as needed
@@ -801,25 +790,37 @@ export class Packer {
             if (needSpace[abbr] & NEED_SPACE_AFTER) replacements += ' ';
             replacements += abbr;
         }
-        return { abbrs: commonIdents, code: replacements + output };
+        return { abbrs: commonIdents, code: replacements + output, maxAbbreviations };
     }
 
     makeDecoder() {
-        this.prepare();
+        const preparedText = Packer.prepareText(this.inputsByType.text || [], this.options);
+        const preparedJs = Packer.prepareJs(this.inputsByType.js || [], this.options);
+        if (this.options.numAbbreviations > preparedJs.maxAbbreviations) {
+            // we have no more than this many abbreviations, so later optimization should be limited to this
+            this.options.numAbbreviations = preparedJs.maxAbbreviations;
+        }
+        // TODO if we are to have multiple inputs they have to be splitted
+        const combinedInput = [...preparedText.text, ...preparedJs.code].map(c => c.charCodeAt(0));
+
+        const inBits = combinedInput.every(c => c <= 0x7f) ? 7 : 8;
+        const outBits = 6;
+        // TODO again, this should be controlled dynamically
+        const modelQuotes = preparedJs.code.length > 0;
 
         const {
             sparseSelectors,
-            inBits, outBits, contextBits, precision, modelMaxCount,
+            contextBits, precision, modelMaxCount,
             learningRateNum, learningRateDenom,
         } = this.options;
 
-        const model = new DefaultModel(this.options);
-        const { buf, state, inputLength, bufLengthInBytes } =
-            compressWithModel(this.combinedInput, model, this.options);
+        const compressOptions = { inBits, outBits, modelQuotes, ...this.options };
+        const model = new DefaultModel(compressOptions);
+        const { buf, state, inputLength, bufLengthInBytes } = compressWithModel(combinedInput, model, compressOptions);
 
         const numModels = sparseSelectors.length;
-        const predictionBits = 8 * predictionBytesPerContext(this.options);
-        const countBits = 8 * countBytesPerContext(this.options);
+        const predictionBits = 8 * predictionBytesPerContext(compressOptions);
+        const countBits = 8 * countBytesPerContext(compressOptions);
 
         const selectors = [];
         for (const selector of sparseSelectors) {
@@ -1007,20 +1008,20 @@ export class Packer {
         const [input] = this.inputsByType.text || this.inputsByType.js;
         switch (input.type) {
             case 'text':
-                outputVar = stringifiedInput(this.preparedText.utf8);
+                outputVar = stringifiedInput(preparedText.utf8);
                 break;
 
             case 'js':
-                if (this.preparedJs.abbrs.length === 0) {
+                if (preparedJs.abbrs.length === 0) {
                     outputVar = `c=w=${stringifiedInput()}`;
-                } else if (this.preparedJs.abbrs.length < 3) {
+                } else if (preparedJs.abbrs.length < 3) {
                     secondLine += `c=w=${stringifiedInput()};`;
-                    for (const [, abbr] of this.preparedJs.abbrs) {
+                    for (const [, abbr] of preparedJs.abbrs) {
                         secondLine += `with(c.split(\`${escapeCharInTemplate(abbr)}\`))c=join(shift());`;
                     }
                 } else {
                     // character class is probably uncompressible so the shorter one is preferred
-                    const abbrCharSet = new Set(this.preparedJs.abbrs.map(([, abbr]) => abbr.charCodeAt(0)));
+                    const abbrCharSet = new Set(preparedJs.abbrs.map(([, abbr]) => abbr.charCodeAt(0)));
                     const abbrCharClass1 = makeCharClass(abbrCharSet, true);
                     const abbrCharClass2 = makeCharClass(abbrCharSet, false);
                     const abbrCharClass = (abbrCharClass2.length < abbrCharClass1.length ? abbrCharClass2 : abbrCharClass1);

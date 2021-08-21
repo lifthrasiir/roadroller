@@ -232,7 +232,7 @@ test('compress with DefaultModel', t => {
 //------------------------------------------------------------------------------
 
 test('prepareJs without abbrs', t => {
-    const prepare = data => Packer.prepareJs([{ data }], { minFreqForAbbrs: Infinity }).code;
+    const prepare = data => Packer.prepareJs([{ data }], { numAbbreviations: 0 }).code;
     t.is(prepare(`hello`), `hello`);
     t.is(prepare(`  3 + 4\n\n + 5   \n`), `3+4\n+5`);
     t.is(prepare(`foo\`bar\nquux\``), `foo\`bar\nquux\``);
