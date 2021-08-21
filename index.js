@@ -479,6 +479,11 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
     let best = selectors.slice();
     let bestSize = currentSize;
 
+    if (progress) {
+        const info = { temperature: Infinity, current, currentSize, currentRejected: false, best, bestSize, bestUpdated: true };
+        if (await progress(info) === false) throw new Error('search aborted');
+    }
+
     // simulated annealing
     const searchStart = performance.now();
     let temperature = 1;

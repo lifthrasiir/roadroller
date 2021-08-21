@@ -184,12 +184,10 @@ if (outputPath === undefined) outputPath = '-';
 let packer = new Packer(inputs, options);
 
 if (optimize) {
-    const origSize = packer.makeDecoder().estimateLength();
-    if (!silent) console.warn(`original size:`, origSize);
-
     // the js input can be freely changed to the text, see if it fares better
     let preferText = false;
     if (inputs[0].type === 'js') {
+        const origSize = packer.makeDecoder().estimateLength();
         inputs[0].type = 'text';
         const textPacker = new Packer(inputs, options);
         const textSize = textPacker.makeDecoder().estimateLength();
@@ -205,7 +203,8 @@ if (optimize) {
     const result = await packer.optimizeSparseSelectors(info => {
         if (silent) return;
         console.warn(
-            `(T=${info.temperature.toFixed(4)}) trying ${JSON.stringify(info.current)}:`,
+            (info.temperature > 1 ? '(baseline)' : `(T=${info.temperature.toFixed(4)})`) +
+                ` trying ${JSON.stringify(info.current)}:`,
             info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
     });
     if (!silent) {
