@@ -49,7 +49,6 @@ const newUintArray = (pool, parent, nbits, length) => {
     if (nbits <= 8) return new Uint8Array(pool ? pool.allocate(parent, length) : length);
     if (nbits <= 16) return new Uint16Array(pool ? pool.allocate(parent, length * 2) : length);
     if (nbits <= 32) return new Uint32Array(pool ? pool.allocate(parent, length * 4) : length);
-    if (nbits <= 64) return new Uint64Array(pool ? pool.allocate(parent, length * 8) : length);
     throw 'newUintArray: nbits is too large';
 };
 
@@ -591,7 +590,7 @@ export class Packer {
 
     get memoryUsageMB() {
         const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
-        return ((this.options.sparseSelectors.length * bytesPerContext) << this.options.contextBits) / 1048576;
+        return this.options.sparseSelectors.length * bytesPerContext * (1 << this.options.contextBits) / 1048576;
     }
 
     static prepareText(inputs) {
