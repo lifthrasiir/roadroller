@@ -172,13 +172,16 @@ export interface PackerOptions {
 export class Packer {
     constructor(inputs: Input[], options: PackerOptions);
     readonly memoryUsageMB: number;
-    makeDecoder(): {
-        firstLine: string;
-        firstLineLengthInBytes: number;
-        secondLine: string;
-    };
+    makeDecoder(): Packed;
     optimizeSparseSelectors(
         progress?: (info: OptimizerProgressInfo) => undefined | boolean | Promise<undefined | boolean>,
     ): Promise<OptimizerResult>;
+}
+
+export interface Packed {
+    readonly firstLine: string;
+    readonly firstLineLengthInBytes: number;
+    readonly secondLine: string;
+    estimateLength(): number;
 }
 

@@ -3,7 +3,6 @@
 import * as fs from 'fs';
 import * as process from 'process';
 import { ArrayBufferPool, Packer, defaultSparseSelectors } from './index.js';
-import { estimateDeflatedSize } from './deflate.js';
 
 let VERSION = 'unknown';
 try {
@@ -185,18 +184,16 @@ if (outputPath === undefined) outputPath = '-';
 let packer = new Packer(inputs, options);
 
 if (optimize) {
-    const { firstLineLengthInBytes, secondLine } = packer.makeDecoder();
-    const origSize = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
+    const origSize = packer.makeDecoder().estimateLength();
     if (!silent) console.warn(`original size:`, origSize);
 
     // the js input can be freely changed to the text, see if it fares better
     let preferText = false;
     if (inputs[0].type === 'js') {
-        const inputs2 = JSON.parse(JSON.stringify(inputs));
-        inputs2[0].type = 'text';
-        const textPacker = new Packer(inputs2, options);
-        const { firstLineLengthInBytes, secondLine } = textPacker.makeDecoder();
-        const textSize = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
+        inputs[0].type = 'text';
+        const textPacker = new Packer(inputs, options);
+        const textSize = textPacker.makeDecoder().estimateLength();
+        inputs[0].type = 'js';
 
         if (textSize < origSize) {
             if (!silent) console.warn(`switch the JS input to the text:`, textSize);
@@ -219,12 +216,12 @@ if (optimize) {
     }
 }
 
-const { firstLine, firstLineLengthInBytes, secondLine } = packer.makeDecoder();
-const output = firstLine + '\n' + secondLine;
+const packed = packer.makeDecoder();
+const output = packed.firstLine + '\n' + packed.secondLine;
 const origLength = inputs.reduce((acc, { data } ) => {
     return acc + (Array.isArray(data) ? data.length : unescape(encodeURIComponent(data)).length);
 }, 0);
-const compressedLength = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
+const compressedLength = packed.estimateLength();
 const ratio = origLength > 0 ? 100 - compressedLength / origLength * 100 : -Infinity;
 if (!optimize && !silent) {
     console.warn(`compressed ${origLength}B into ${compressedLength}B (estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'}).`);

@@ -1040,18 +1040,28 @@ export class Packer {
                 break;
         }
 
-        return { firstLine, firstLineLengthInBytes: bufLengthInBytes, secondLine };
+        return new Packed({ firstLine, firstLineLengthInBytes: bufLengthInBytes, secondLine });
     }
 
     async optimizeSparseSelectors(progress) {
         const result = await optimizeSparseSelectors(this.options.sparseSelectors, sparseSelectors => {
             this.options.sparseSelectors = sparseSelectors;
-            const { firstLineLengthInBytes, secondLine } = this.makeDecoder();
-            const secondLineLengthInBytes = estimateDeflatedSize(secondLine);
-            return firstLineLengthInBytes + secondLineLengthInBytes;
+            return this.makeDecoder().estimateLength();
         }, progress);
         this.options.sparseSelectors = result.best;
         return result;
+    }
+}
+
+class Packed {
+    constructor({ firstLine, firstLineLengthInBytes, secondLine }) {
+        this.firstLine = firstLine;
+        this.firstLineLengthInBytes = firstLineLengthInBytes;
+        this.secondLine = secondLine;
+    }
+
+    estimateLength() {
+        return this.firstLineLengthInBytes + estimateDeflatedSize(this.secondLine);
     }
 }
 
