@@ -863,6 +863,15 @@ export class Packer {
             return (toggle ? '' : '^') + ranges.join('');
         };
 
+        const pow2 = n => {
+            if (n < 10) return '' + (1 << n);
+            // make use of M = 2^(precision+1) as much as possible
+            n -= precision + 1;
+            if (n < 0) return `M/${1 << -n}`;
+            if (n > 0) return `M*${1 << n}`;
+            return 'M';
+        };
+
         // the decoder consists of three loops and its code order doesn't match
         // with the execution order, which is denoted with the preceding number.
 
@@ -886,7 +895,7 @@ export class Packer {
             `t=${state};` +
             `M=1<<${precision + 1};` +
             `w=${JSON.stringify(Array(numModels).fill(0))};` +
-            `p=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(M/4);` +
+            `p=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(${pow2(precision - 1)});` +
             `c=new Uint${countBits}Array(${numModels}<<${contextBits}).fill(1);` +
 
             // o: decoded data
@@ -931,7 +940,7 @@ export class Packer {
                     // update the bitwise context (we haven't updated a yet, so this is fine)
                     // y is not used but used here to exploit a repeated code fragment
                     `y=p[C]+=` +
-                        `(e*M/2-p[C]<<${30 - precision})/` +
+                        `(e*${pow2(precision)}-p[C]<<${30 - precision})/` +
                             `(c[C]+=2*(c[C]<${2 * modelMaxCount}))` +
                         // this corresponds to delta in the DirectContextModel.update method;
                         // we've already verified delta is within +/-2^31, so `>>>` is not required
@@ -953,9 +962,9 @@ export class Packer {
                 :
                     `m=0,u=${JSON.stringify(selectors)}`
                 ) + `.map((C,i)=>` +
-                    `((1<<${contextBits})-1&` +
+                    `(y=0,` +
                         (singleDigitSelectors ? `[...C]` : `C`) +
-                        `.reduce((C,i)=>(o[l-i]|0)+C*997|0,0)*997+a` +
+                        `.map((C,i)=>(y=y*997+(o[l-C]|0)|0)),${pow2(contextBits)}-1&y*997+a` +
                         (quotes.length > 0 ? '+!!f*129' : '') +
                     `)*${numModels}+i` +
                 `),` +
@@ -978,9 +987,9 @@ export class Packer {
             `;` +
 
                 // 5. renormalize (and advance the input offset) if needed
-                `t<M<<${27 - outBits - precision}` +
+                `t<${pow2(28 - outBits)}` +
             `;` +
-                `t=t<<${outBits}|A.charCodeAt(r++)&${(1 << outBits) - 1}` +
+                `t=t*${1<<outBits}|A.charCodeAt(r++)&${(1 << outBits) - 1}` +
             `);`;
 
         // 9. postprocessing
