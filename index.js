@@ -829,8 +829,8 @@ export class Packer {
             // the input is either forced to be encoded in UTF-8
             // or (in the case of JS inputs) always in ASCII thus can be decoded as UTF-8.
             utf8 || inputLength >= TEXT_DECODER_THRESHOLD ?
-                `new TextDecoder().decode(new Uint8Array(z))` :
-                `String.fromCharCode(...z)`;
+                `new TextDecoder().decode(new Uint8Array(o))` :
+                `String.fromCharCode(...o)`;
 
         // \0 is technically allowed by JS but can't appear in <script>
         const escapeCharInTemplate = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', '`': '\\`' })[c] || c;
@@ -867,9 +867,9 @@ export class Packer {
         // with the execution order, which is denoted with the preceding number.
 
         // 0.
-        // _: rANS output encoded in lowest 6 bits (higher bits are chosen to avoid backslash)
+        // A: rANS output encoded in lowest 6 bits (higher bits are chosen to avoid backslash)
         // this should be isolated from other code for the best DEFLATE result
-        let firstLine = `_='`;
+        let firstLine = `A='`;
         const CHUNK_SIZE = 8192;
         for (let i = 0; i < buf.length; i += CHUNK_SIZE) {
             firstLine += String.fromCharCode(...buf.slice(i, i + CHUNK_SIZE).map(c => c === 0x1c || c === 0x3f ? c : c | 0x40));
@@ -889,97 +889,98 @@ export class Packer {
             `p=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(M/4);` +
             `c=new Uint${countBits}Array(${numModels}<<${contextBits}).fill(1);` +
 
-            // z: decoded data
-            // r: read position in _
-            // k: write position in z
+            // o: decoded data
+            // r: read position in A
+            // l: write position in o
             // f: if in string the quote character code, otherwise 0 (same to state.quote)
             // we know the exact input length, so we don't have the end of data symbol
-            `for(z=[r=k=${quotes.length > 0 ? 'f=' : ''}0];` +
+            `for(o=[r=l=${quotes.length > 0 ? 'f=' : ''}0];` +
 
                 // 2. read until the known length
-                `k<${inputLength};` +
+                `l<${inputLength};` +
 
                 // 7. code to be executed after reading one byte
                 //
-                // v is now the decode byte plus additional topmost 1 bit, write (and keep) it
-                `z[k++]=v-=${1 << inBits}` +
+                // a is now the decode byte plus additional topmost 1 bit, write (and keep) it
+                `o[l++]=a-=${1 << inBits}` +
 
             (quotes.length > 0 ?
-                // update f according to v
+                // update f according to a
                 `,f=f?` +
                     // if we are in a string we either keep f or reset to 0 if f appeared again
-                    `v-f&&f:` +
-                    // otherwise we set f to v if v is one of opening quotes
+                    `a-f&&f:` +
+                    // otherwise we set f to a if a is one of opening quotes
                     // (we only process quotes that actually have appeared in the input)
                     (quotes.length > 1 ?
-                        `(${quotes.map(q => `v==${q}`).join('|')})&&v` :
-                        `v==${quotes[0]}&&v`)
+                        `(${quotes.map(q => `a==${q}`).join('|')})&&a` :
+                        `a==${quotes[0]}&&a`)
             : '') +
 
             `)` +
 
             // 3. bitwise read loop
             //
-            // v: bit context, equal to `0b1xx..xx` where xx..xx is currently read bits
-            // if v got more than inBits bits we are done reading one input character
-            `for(v=1;v<${1 << inBits};` +
+            // a: bit context, equal to `0b1xx..xx` where xx..xx is currently read bits
+            // if a got more than inBits bits we are done reading one input character
+            `for(a=1;a<${1 << inBits};` +
 
-                // 6. update contexts and weights with b and v (which is now the bit context)
+                // 6. update contexts and weights with e and a (which is now the bit context)
                 //
                 // i: model index (unique in the entire code)
-                `u.map((j,i)=>(` +
-                    // update the bitwise context (we haven't updated v yet, so this is fine)
-                    `y=p[j]+=` +
-                        `(b*M/2-p[j]<<${30 - precision})/` +
-                            `(c[j]+=2*(c[j]<${2 * modelMaxCount}))` +
+                `u.map((C,i)=>(` +
+                    // update the bitwise context (we haven't updated a yet, so this is fine)
+                    // y is not used but used here to exploit a repeated code fragment
+                    `y=p[C]+=` +
+                        `(e*M/2-p[C]<<${30 - precision})/` +
+                            `(c[C]+=2*(c[C]<${2 * modelMaxCount}))` +
                         // this corresponds to delta in the DirectContextModel.update method;
                         // we've already verified delta is within +/-2^31, so `>>>` is not required
                         `>>${29 - precision},` +
                     // update the weight
-                    `w[i]+=x[i]*(b-q/M)` +
+                    `w[i]+=x[i]*(e-m/M)` +
                 `)),` +
-                `v=v*2+b` +
+                `a=a*2+e` +
 
             `)` +
 
             // 4. predict and read one bit
             `for(` +
 
-                // q: sum of weighted probabilities
+                // m: sum of weighted probabilities
                 // u: the context hash
                 (singleDigitSelectors ?
-                    `u='${selectors.map(i => i.join('')).join('0')}'.split(q=0)`
+                    `u='${selectors.map(i => i.join('')).join('0')}'.split(m=0)`
                 :
-                    `q=0,u=${JSON.stringify(selectors)}`
-                ) + `.map((j,i)=>` +
+                    `m=0,u=${JSON.stringify(selectors)}`
+                ) + `.map((C,i)=>` +
                     `((1<<${contextBits})-1&` +
-                        (singleDigitSelectors ? `[...j]` : `j`) +
-                        `.reduce((j,i)=>j*997+(z[k-i]|0)|0,0)*997+v` +
+                        (singleDigitSelectors ? `[...C]` : `C`) +
+                        `.reduce((C,i)=>(o[l-i]|0)+C*997|0,0)*997+a` +
                         (quotes.length > 0 ? '+!!f*129' : '') +
                     `)*${numModels}+i` +
                 `),` +
 
-                // calculate the mixed prediction q
-                `x=u.map((j,i)=>(` +
-                    `y=p[j]*2+1,` +
+                // calculate the mixed prediction m
+                `x=u.map((C,i)=>(` +
+                    `y=p[C]*2+1,` +
                     // stretch(prob), needed for updates
                     `y=Math.log(y/(M-y)),` +
-                    `q-=w[i]*y,` +
+                    `m-=w[i]*y,` +
                     // premultiply with learning rate
                     `y${learningRateNum == 1 ? '' : '*'+learningRateNum}/${learningRateDenom}` +
                 `)),` +
 
-                // q: squash(sum of weighted preds) followed by adjustment
-                `q=~-M/(1+Math.exp(q))|1,` +
-                // decode the bit b
-                `b=t%M<q,` +
-                `t=(b?q:M-q)*(t>>${precision + 1})+t%M-!b*q` +
+                // m: squash(sum of weighted preds) followed by adjustment
+                `m=~-M/(1+Math.exp(m))|1,` +
+                // decode the bit e
+                `e=t%M<m,` +
+                `t=t%M+(e?m:M-m)*(t>>${precision + 1})-!e*m` +
             `;` +
 
                 // 5. renormalize (and advance the input offset) if needed
                 `t<M<<${27 - outBits - precision}` +
             `;` +
-                `t=t<<${outBits}|_.charCodeAt(r++)&${(1 << outBits) - 1}` +
+                `t=t<<${outBits}|A.charCodeAt(r++)&${(1 << outBits) - 1}` +
             `);`;
 
         // 9. postprocessing
