@@ -529,23 +529,26 @@ const TEXT_DECODER_THRESHOLD = 65000;
 
 export class Packer {
     constructor(inputs, options = {}) {
-        options.sparseSelectors = options.sparseSelectors || defaultSparseSelectors();
-        options.maxMemoryMB = options.maxMemoryMB || 150;
-        options.precision = options.precision || 16;
-        options.modelMaxCount = options.modelMaxCount || 63;
-        options.learningRateNum = options.learningRateNum || 1;
-        options.learningRateDenom = options.learningRateDenom || 256;
-        if (!options.contextBits) {
-            const bytesPerContext = predictionBytesPerContext(options) + countBytesPerContext(options);
-            options.contextBits = Math.log2(options.maxMemoryMB / options.sparseSelectors.length / bytesPerContext) + 20 | 0;
+        this.options = {
+            sparseSelectors: options.sparseSelectors ? options.sparseSelectors.slice() : defaultSparseSelectors(),
+            maxMemoryMB: options.maxMemoryMB || 150,
+            precision: options.precision || 16,
+            modelMaxCount: options.modelMaxCount || 63,
+            learningRateNum: options.learningRateNum || 1,
+            learningRateDenom: options.learningRateDenom || 256,
+            contextBits: options.contextBits,
+            arrayBufferPool: options.arrayBufferPool,
+        };
+        if (!this.options.contextBits) {
+            const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
+            this.options.contextBits = Math.log2(this.options.maxMemoryMB / this.options.sparseSelectors.length / bytesPerContext) + 20 | 0;
         }
-        this.options = options;
 
         this.inputsByType = {};
         this.evalInput = null;
         for (let i = 0; i < inputs.length; ++i) {
-            inputs[i].index = i;
             const { data, type, action } = inputs[i];
+            const input = { data, type, action };
             if (!['js', 'glsl', 'html', 'text', 'binary'].includes(type)) {
                 throw new Error('Packer: unknown input type');
             }
@@ -565,12 +568,12 @@ export class Packer {
                 throw new Error('Packer: binary inputs cannot use string or write action');
             }
             this.inputsByType[type] = this.inputsByType[type] || [];
-            this.inputsByType[type].push(inputs[i]);
+            this.inputsByType[type].push(input);
             if (action === 'eval') {
                 if (this.evalInput) {
                     throw new Error('Packer: there can be at most one input with eval action');
                 }
-                this.evalInput = inputs[i];
+                this.evalInput = input;
             }
         }
 
