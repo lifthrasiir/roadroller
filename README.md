@@ -45,8 +45,8 @@ By default Roadroller receives your JS code and returns a compressed JS code tha
 The resulting code will look like this:
 
 ```javascript
-_='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'
-t=12345678;M=1<<17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint32Array(12<<21).fill(M/4);/* omitted */;eval(c)
+A='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'
+t=12345678;M=1<<17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint16Array(12<<21).fill(M/4);/* omitted */;eval(c)
 ```
 
 The first line is a compressed data. It can contain control characters `` (U+001F) that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
@@ -111,15 +111,23 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 * While not strictly required, `Packer.optimizeSparseContexts` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
 
-**Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
+**Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture; `-v` will print the actual memory usage to stderr. The default is 150 MB.
 
 ### Advanced Configuration
 
 <!--**Output variable name** (CLI `--output-var VAR`) sets the variable name for output values. If the name is empty, it is determined from the input code and typically named `_`. You don't need to change this unless you are doing a weird thing and the code can refer to variables that do not appear in verbatim.-->
 
-**Chosen contexts** (CLI `-S|--selectors SELECTOR,SELECTOR,...`, API `sparseSelectors` in the options object) are actual modelling parameters, one number for each context. Each bit of numbers is set if the particular order is used for given sparse context: 5 = 101<sub>(2)</sub> for example would correspond to the sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
+**Chosen contexts** (CLI `-S|--selectors SELECTOR,SELECTOR,...`, API `sparseSelectors` in the options object) determine which byte contexts are used for each model. <i>K</i>th bit of the number (where K > 0) is set if the context contains the <i>K</i>th-to-last byte: 5 = 101<sub>(2)</sub> for example would correspond to the context of the last byte and third-to-last byte, also called a sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
 
-<!--**Learning rate** (CLI `--learning-rate NUM/DENOM`, API `learningRateNum/Denom` in the options object) is a simple fraction that adjusts how fast would the model adapt, where larger is faster. The default is 1/256 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try 1/128.-->
+**Precision** (CLI `-Zpr|--precision BITS`, API `precision` in the options object) is the number of fractional bits used in the internal fixed point representation. This is shared between the entropy coder and context models and can't be decoupled. The default of 16 should be enough, you can also try to decrease it.
+
+**Learning rate** (CLI `-Zlr|--learning-rate RATE`, API `recipLearningRate` in the options object) adjusts how fast would the context mixer adapt, where smaller is faster. The default is 500 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try smaller numbers.
+
+**Model max count** (CLI `-Zmc|--model-max-count COUNT`, API `modelMaxCount` in the options object) adjusts how fast would individual contexts adapt, where smaller is faster. The model adapts fastest when a particular context is first seen, but that process becomes slower as the context is seen multiple times. This parameter limits how slowest the adaptation process can be. The default of 5 is specifically tuned for JS code inputs.
+
+**Number of abbreviations** (CLI `-Zab|--num-abbreviations NUM`, API `numAbbreviations` in the options object) affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
+
+**Number of context bits** (CLI `-Zco|--context-bits BITS`, API `contextBits` in the options object) sets the size of individual model as opposed to the total memory use (`-M`), which is a product of the number of context and the size of each model. This explicit option is most useful for the fair benchmarking, since some parameters like `-Zpr` or `-Zmc` affect the memory use and therefore this parameter.
 
 <!--**Optimize for uncompressed size** (CLI `--uncompressed-only`) assumes the absence of the outer comperssion algorithm like DEFLATE. This is *bad* for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
 
