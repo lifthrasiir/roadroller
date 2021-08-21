@@ -295,11 +295,10 @@ export class SparseContextModel extends DirectContextModel {
 }
 
 export class LogisticMixModel {
-    constructor(models, { learningRateNum, learningRateDenom, precision }) {
+    constructor(models, { recipLearningRate, precision }) {
         this.models = models;
         this.precision = precision;
-        this.learningRateNum = learningRateNum;
-        this.learningRateDenom = learningRateDenom;
+        this.recipLearningRate = recipLearningRate;
 
         this.mixedProb = 0;
         this.stretchedProbs = [];
@@ -335,7 +334,7 @@ export class LogisticMixModel {
             this.models[i].update(actualBit, context);
 
             let prob = this.stretchedProbs[i];
-            prob = prob * this.learningRateNum / this.learningRateDenom;
+            prob = prob / this.recipLearningRate;
             this.weights[i] += prob * (actualBit - mixedProb);
         }
     }
@@ -538,8 +537,9 @@ export class Packer {
             maxMemoryMB: options.maxMemoryMB || 150,
             precision: options.precision || 16,
             modelMaxCount: options.modelMaxCount || 63,
-            learningRateNum: options.learningRateNum || 1,
-            learningRateDenom: options.learningRateDenom || 256,
+            recipLearningRate:
+                options.recipLearningRate ||
+                Math.max(1, Math.round((options.learningRateDenom || 256) / (options.learningRateNum || 1))),
             contextBits: options.contextBits,
             arrayBufferPool: options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
@@ -807,11 +807,7 @@ export class Packer {
         // TODO again, this should be controlled dynamically
         const modelQuotes = preparedJs.code.length > 0;
 
-        const {
-            sparseSelectors,
-            contextBits, precision, modelMaxCount,
-            learningRateNum, learningRateDenom,
-        } = this.options;
+        const { sparseSelectors, contextBits, precision, modelMaxCount, recipLearningRate } = this.options;
 
         const compressOptions = { inBits, outBits, modelQuotes, ...this.options };
         const model = new DefaultModel(compressOptions);
@@ -984,7 +980,7 @@ export class Packer {
                     `y=Math.log(y/(M-y)),` +
                     `m-=w[i]*y,` +
                     // premultiply with learning rate
-                    `y${learningRateNum == 1 ? '' : '*'+learningRateNum}/${learningRateDenom}` +
+                    `y/${recipLearningRate}` +
                 `)),` +
 
                 // m: squash(sum of weighted preds) followed by adjustment

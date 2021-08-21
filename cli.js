@@ -215,9 +215,9 @@ async function parseArgs(args) {
             if (options.contextBits < 1 || options.contextBits > 30) throw 'invalid --context-bits argument';
             // additional check below
         } else if (m = matchOptArg('learning-rate', 'Zlr')) {
-            if (options.learningRateDenom !== undefined) throw 'duplicate --learning-rate arguments';
-            options.learningRateDenom = parseInt(getArg(m), 10);
-            if (options.learningRateDenom < 1 || options.learningRateDenom > 2**53) {
+            if (options.recipLearningRate !== undefined) throw 'duplicate --learning-rate arguments';
+            options.recipLearningRate = parseInt(getArg(m), 10);
+            if (options.recipLearningRate < 1 || options.recipLearningRate > 2**53) {
                 throw 'invalid --learning-rate argument';
             }
         } else if (m = matchOptArg('model-max-count', 'Zmc')) {

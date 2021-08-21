@@ -65,8 +65,7 @@ export class SparseContextModel implements DirectContextModel {
 }
 
 export interface LogisticMixModelOptions {
-    learningRateNum: number;
-    learningRateDenom: number;
+    recipLearningRate: number;
     precision: number;
 }
 
@@ -166,7 +165,10 @@ export interface PackerOptions {
     precision?: number;
     modelMaxCount?: number;
     arrayBufferPool?: ArrayBufferPool;
+    recipLearningRate?: number;
+    /** @deprecated use {@link PackerOptions.recipLearningRate} */
     learningRateNum?: number;
+    /** @deprecated use {@link PackerOptions.recipLearningRate} */
     learningRateDenom?: number;
     numAbbreviations?: number;
 }

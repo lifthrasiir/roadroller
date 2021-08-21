@@ -209,8 +209,7 @@ test('compress with DefaultModel', t => {
         contextBits: 12,
         precision: 16,
         modelMaxCount: 63,
-        learningRateNum: 1,
-        learningRateDenom: 256,
+        recipLearningRate: 256,
         modelQuotes: true,
     };
     let model;
