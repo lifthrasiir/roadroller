@@ -65,9 +65,9 @@ Output options:
 -Zco|--context-bits BITS [Range: 1..24+, Default: derived]
   Sets the size of each context model, as opposed to the total size (-M).
   The maximum can range from 24 to 30 depending on the number of contexts.
--Zlr|--learning-rate RATE [Range: 1..2^53, Default: 256]
+-Zlr|--learning-rate RATE [Range: 1..2^53, Default: 500]
   Configures the learning rate of context mixer; smaller adapts faster.
--Zmc|--model-max-count COUNT [Range: 1..32767, Default: 63]
+-Zmc|--model-max-count COUNT [Range: 1..32767, Default: 5]
   Configures the adaptation speed of context models.
   Context models adapt fastest when the context is first seen,
   but become slower each subsequent occurrence of the context.

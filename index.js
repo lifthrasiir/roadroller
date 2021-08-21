@@ -536,10 +536,10 @@ export class Packer {
             sparseSelectors: options.sparseSelectors ? options.sparseSelectors.slice() : defaultSparseSelectors(),
             maxMemoryMB: options.maxMemoryMB || 150,
             precision: options.precision || 16,
-            modelMaxCount: options.modelMaxCount || 63,
+            modelMaxCount: options.modelMaxCount || 5,
             recipLearningRate:
                 options.recipLearningRate ||
-                Math.max(1, Math.round((options.learningRateDenom || 256) / (options.learningRateNum || 1))),
+                Math.max(1, Math.round((options.learningRateDenom || 500) / (options.learningRateNum || 1))),
             contextBits: options.contextBits,
             arrayBufferPool: options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
