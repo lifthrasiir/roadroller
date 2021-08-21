@@ -45,20 +45,22 @@ Output options:
   Tries to tune parameters for this input.
     0               Use the baseline parameters.
     1               Tries to optimize via simulated annealing.
--M|--max-memory MEGABYTES [Default: 150]
-  Configures the maximum memory usage. The actual usage might be lower.
--S|--selectors xNUMCONTEXTS [Default: 12]
+                    Also prints the best parameters unless -q is given.
+-M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
+  Configures the maximum memory usage.
+  The actual usage might be lower. Use -v to print the actual usage.
+-S|--selectors xNUMCONTEXTS [Range: 1..64, Default: 12]
   Sets the maximum number of contexts used, prefixed by a literal "x".
-  Smaller number can be used to finetune the memory usage.
-  Larger number only affects the optimization process.
+  For 13+ contexts additional contexts are randomly picked.
+  Can be used for finer (linear) tuning of the memory usage.
 -S|--selectors SELECTOR,SELECTOR... [Default: ${defaultSparseSelectors()}]
   Sets the explicit contexts to be used. See the README for details.
-  The optimization prints the best parameters found at the end,
-  so that you can copy and paste them for later uses.
 
 Other options:
 -q|--silent
   Suppresses any diagnostic messages.
+-v|--verbose
+  Prints more information whenever appropriate. Can be repeated.
 -h|--help
   Prints this message.
 -V|--version
@@ -85,7 +87,7 @@ async function parseArgs(args) {
     let optimize;
     let outputPath;
     let nextIsArg = false;
-    let silent = false;
+    let verbose = 0; // -1: -q, 0: default, 1: -v, 2: -vv, ...
 
     for (let i = 0; i < args.length; ++i) {
         const opt = args[i];
@@ -135,7 +137,11 @@ async function parseArgs(args) {
         } else if (matchOpt('version', 'V')) {
             return { command: 'version' };
         } else if (matchOpt('silent', 'q')) {
-            silent = true;
+            if (verbose > 0) throw '-q and -v cannot be used together';
+            verbose = -1;
+        } else if (m = opt.match(/^(?:--verbose|-(v+))$/)) {
+            if (verbose < 0) throw '-v and -q cannot be used together';
+            verbose += (m[1] || 'v').length;
         } else if (m = matchOptArg('type', 't')) {
             if (currentInput.type !== undefined) throw 'duplicate --type arguments';
             currentInput.type = getArg(m);
@@ -184,11 +190,15 @@ async function parseArgs(args) {
     }
     if (optimize === undefined) optimize = 0;
     if (outputPath === undefined) outputPath = '-';
-    return { command: 'compress', inputs, options, optimize, outputPath, silent };
+    return { command: 'compress', inputs, options, optimize, outputPath, verbose };
 }
 
-async function compress({ inputs, options, optimize, outputPath, silent }) {
+async function compress({ inputs, options, optimize, outputPath, verbose }) {
     let packer = new Packer(inputs, options);
+
+    if (verbose >= 1) {
+        console.warn(`Actual memory usage: ${packer.memoryUsageMB} MB (out of ${options.maxMemoryMB || 150} MB)`);
+    }
 
     if (optimize) {
         // the js input can be freely changed to the text, see if it fares better
@@ -201,20 +211,20 @@ async function compress({ inputs, options, optimize, outputPath, silent }) {
             inputs[0].type = 'js';
 
             if (textSize < origSize) {
-                if (!silent) console.warn(`switch the JS input to the text:`, textSize);
+                if (verbose >= 0) console.warn(`switch the JS input to the text:`, textSize);
                 packer = textPacker;
                 preferText = true;
             }
         }
 
         const result = await packer.optimizeSparseSelectors(info => {
-            if (silent) return;
+            if (verbose < 0) return;
             console.warn(
                 (info.temperature > 1 ? '(baseline)' : `(T=${info.temperature.toFixed(4)})`) +
                     ` trying ${JSON.stringify(info.current)}:`,
                 info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
         });
-        if (!silent) {
+        if (verbose >= 0) {
             console.warn(
                 `search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ` +
                 `use \`${preferText ? '-t text ' : ''}-S ${result.best.join(',')}\` to replicate:`,
@@ -229,7 +239,7 @@ async function compress({ inputs, options, optimize, outputPath, silent }) {
     }, 0);
     const compressedLength = packed.estimateLength();
     const ratio = origLength > 0 ? 100 - compressedLength / origLength * 100 : -Infinity;
-    if (!optimize && !silent) {
+    if (!optimize && verbose >= 0) {
         console.warn(`compressed ${origLength}B into ${compressedLength}B (estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'}).`);
     }
     if (outputPath === '-') {
