@@ -792,13 +792,9 @@ export class Packer {
         return { abbrs: commonIdents, code: replacements + output, maxAbbreviations };
     }
 
-    makeDecoder() {
-        const preparedText = Packer.prepareText(this.inputsByType.text || [], this.options);
-        const preparedJs = Packer.prepareJs(this.inputsByType.js || [], this.options);
-        if (this.options.numAbbreviations > preparedJs.maxAbbreviations) {
-            // we have no more than this many abbreviations, so later optimization should be limited to this
-            this.options.numAbbreviations = preparedJs.maxAbbreviations;
-        }
+    static pack(inputsByType, options) {
+        const preparedText = Packer.prepareText(inputsByType.text || [], options);
+        const preparedJs = Packer.prepareJs(inputsByType.js || [], options);
         // TODO if we are to have multiple inputs they have to be splitted
         const combinedInput = [...preparedText.text, ...preparedJs.code].map(c => c.charCodeAt(0));
 
@@ -807,9 +803,9 @@ export class Packer {
         // TODO again, this should be controlled dynamically
         const modelQuotes = preparedJs.code.length > 0;
 
-        const { sparseSelectors, contextBits, precision, modelMaxCount, recipLearningRate } = this.options;
+        const { sparseSelectors, contextBits, precision, modelMaxCount, recipLearningRate } = options;
 
-        const compressOptions = { inBits, outBits, modelQuotes, ...this.options };
+        const compressOptions = { inBits, outBits, modelQuotes, ...options };
         const model = new DefaultModel(compressOptions);
         const { buf, state, inputLength, bufLengthInBytes } = compressWithModel(combinedInput, model, compressOptions);
 
@@ -1012,7 +1008,7 @@ export class Packer {
         // also should clobber w and c to trigger the GC as soon as possible
         let outputVar = 'c'; // can be replaced with assignment statements if possible
 
-        const [input] = this.inputsByType.text || this.inputsByType.js;
+        const [input] = inputsByType.text || inputsByType.js;
         switch (input.type) {
             case 'text':
                 outputVar = stringifiedInput(preparedText.utf8);
@@ -1058,18 +1054,30 @@ export class Packer {
         if (quotes.length > 0) freeVars.push('f');
         freeVars.sort();
 
-        return new Packed({
+        return {
             firstLine,
             firstLineLengthInBytes: bufLengthInBytes,
             secondLine,
             freeVars,
-        });
+            maxAbbreviations: preparedJs.maxAbbreviations,
+        };
+    }
+
+    makeDecoder() {
+        const result = Packer.pack(this.inputsByType, this.options);
+
+        // so that optimizer doesn't need to try numAbbreviations larger than maxAbbreviations
+        if (this.options.numAbbreviations > result.maxAbbreviations) {
+            this.options.numAbbreviations = result.maxAbbreviations;
+        }
+
+        return new Packed(result);
     }
 
     async optimizeSparseSelectors(progress) {
         const result = await optimizeSparseSelectors(this.options.sparseSelectors, sparseSelectors => {
-            this.options.sparseSelectors = sparseSelectors;
-            return this.makeDecoder().estimateLength();
+            const result = Packer.pack(this.inputsByType, { ...this.options, sparseSelectors });
+            return new Packed(result).estimateLength();
         }, progress);
         this.options.sparseSelectors = result.best;
         return result;
