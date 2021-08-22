@@ -1,7 +1,22 @@
 {
   "name": "roadroller",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Flattens your JS demo",
+  "keywords": [
+    "cli",
+    "compress",
+    "compressor",
+    "ecmascript",
+    "es",
+    "javascript",
+    "js",
+    "roadroller",
+    "js13k",
+    "jscrush",
+    "regpack"
+  ],
+  "homepage": "https://lifthrasiir.github.io/roadroller/",
+  "repository": "github:lifthrasiir/roadroller",
   "main": "index.cjs",
   "module": "index.mjs",
   "types": "index.d.ts",

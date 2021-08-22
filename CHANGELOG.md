@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.2.0 (2021-08-23)
+
+Compression improvements:
+
+- Default parameters have been meticulously tuned for typical JS code inputs. Up to 5% additional gain in compression has been observed. (2c7a59ab55db5c40fffa92ed62fe7a9ca7bdd59b)
+- The optimizer is now able to optimize most internal parameters. (ec7ae89d7ae670b574b2cc4678d570c07a88ceff, e1d1f1bdc4f6242421f5e8620a98bd93d11b975b)
+- The decoder is made slightly smaller when compressed. (c06c51063d5b10e592f38ef20606087efd2c9094, 5ca4907e58706ccdf225f58ddb43c159df0917a2)
+
+UI/API improvements:
+
+- The optimization now reports more detailed progress. (86bd800128065494550dfd6708e4e8cb790df810)
+- The estimated DEFLATE size now refers to the combined stream size and thus is more accurate. (f7bf1a40ec38ce079612c5ee639e1482131fff34)
+- An object returned by `Packer.makeDecoder()` (`Packed`) now includes `estimateLength` method. (bbabf90d61e4faf64b67b1e47140844b5c36452c)
+- CLI now supports `-v`, `-vv` etc. (b2b422da6fd1819c11c8188717aeb30b5e02de25)
+- CLI and online demo now supports advanced configurations via `-Z...` options. The full list of such options is available with `-h -v`. (95457334843a173ce7b1f117dd6b48a72e4f1ed6)
+- The number of contexts can be now configured in the online demo. (5e2d7796bb64aa478a93fe990de7c5163f980e8a)
+- CLI now avoids printing backtrace for known classes of errors. (2f6fb1eab9fdc377ff30cf146f926d64470e022f)
+- Roadroller can be now imported as a CommonJS module. (a097203689d3960d104bdb764c9f97ecd8487507)
+
+Bugfixes:
+
+- Fixed a bug where `-O1` tried to optimize (and print) parameters, but its compressed output was not using those parameters. (e67e50ec88333a5448df3d58b8f4016563cc1d21, e5fa608d6e9feb7c4d1323690e912d692e8e92ef)
+- Fixed a edge case that the data cannot be decompressed if modelMaxCount is 127 or 32767 and an input is long enough that the number is reached. (b22c32c1116f1d099cf370cbb211c0771e61a99f)
+- CLI no longer accepts options like `--optimize1` without an in-between `=`. (04ecffa6eaf23af2c7a52667db8047de3b929e87)
+
+Deprecations:
+
+- `Packer.optimizeSparseSelectors` is deprecated in favor of more powerful `Packer.optimize`. (86bd800128065494550dfd6708e4e8cb790df810)
+- `PackerOptions.learningRateNum/Denom` is deprecated in favor of a combined `PackerOptions.recipLearningRate`. (e78919ed32a81915bcc62c16cfc0c6f5911e16ed)
+
 ## v1.1.0 (2021-08-20)
 
 Compression improvements:
