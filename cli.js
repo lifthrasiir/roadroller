@@ -280,28 +280,29 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
                 JSON.stringify(defaultSparseSelectors(options.sparseSelectors.length)) :
                 ''; // more than 13 selectors are randomly determined
 
-        const format = options => {
+        const format = moreOptions => {
+            const combined = { ...options, ...moreOptions };
             let args;
-            if (!options.sparseSelectors) {
+            if (!combined.sparseSelectors) {
                 args = '-Sx12';
-            } else if (JSON.stringify(options.sparseSelectors) === defaultSelectorsJSON) {
-                args = `-Sx${options.sparseSelectors.length}`;
+            } else if (JSON.stringify(combined.sparseSelectors) === defaultSelectorsJSON) {
+                args = `-Sx${combined.sparseSelectors.length}`;
             } else {
-                args = `-S${options.sparseSelectors.join(',')}`;
+                args = `-S${combined.sparseSelectors.join(',')}`;
             }
-            if (typeof options.precision === 'number') {
-                args = `-Zpr${options.precision} ${args}`;
+            if (typeof combined.precision === 'number') {
+                args = `-Zpr${combined.precision} ${args}`;
             }
-            if (typeof options.modelMaxCount === 'number') {
-                args = `-Zmc${options.modelMaxCount} ${args}`;
+            if (typeof combined.modelMaxCount === 'number') {
+                args = `-Zmc${combined.modelMaxCount} ${args}`;
             }
-            if (typeof options.recipLearningRate === 'number') {
-                args = `-Zlr${options.recipLearningRate} ${args}`;
+            if (typeof combined.recipLearningRate === 'number') {
+                args = `-Zlr${combined.recipLearningRate} ${args}`;
             }
-            if (typeof options.numAbbreviations === 'number') {
-                args = `-Zab${options.numAbbreviations} ${args}`;
+            if (typeof combined.numAbbreviations === 'number') {
+                args = `-Zab${combined.numAbbreviations} ${args}`;
             }
-            if (options.preferTextOverJS) {
+            if (combined.preferTextOverJS) {
                 args = `-t text ${args}`;
             }
             return args;
