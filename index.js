@@ -187,7 +187,7 @@ export class DirectContextModel {
 
         this.arrayBufferPool = arrayBufferPool;
         this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
-        this.counts = newUintArray(arrayBufferPool, this, Math.ceil(Math.log2(modelMaxCount)), 1 << contextBits);
+        this.counts = newUintArray(arrayBufferPool, this, Math.ceil(Math.log2(modelMaxCount + 1)), 1 << contextBits);
         this.predictions.fill(1 << (precision - 1));
         this.counts.fill(0);
 
