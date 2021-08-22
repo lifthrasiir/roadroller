@@ -180,6 +180,10 @@ export interface PackerOptions {
 
 export interface OptimizedPackerOptions {
     sparseSelectors: number[];
+    precision?: number;
+    modelMaxCount?: number;
+    recipLearningRate?: number;
+    numAbbreviations?: number;
     preferTextOverJS?: boolean;
 }
 

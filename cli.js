@@ -44,7 +44,8 @@ Output options:
 -O|--optimize EFFORTS [Default: 0]
   Tries to tune parameters for this input.
     0               Use the baseline parameters.
-    1               Tries to optimize -S with a fixed number of attempts.
+    1               Tries to optimize -S, -Zab, -Zco, -Zlr, -Zmc
+                    with a fixed number of attempts (about 300).
                     Also tries to replace -t js with -t text if better.
   Anything beyond -O0 prints the best parameters unless -q is given.
 -M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
@@ -287,6 +288,18 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
                 args = `-Sx${options.sparseSelectors.length}`;
             } else {
                 args = `-S${options.sparseSelectors.join(',')}`;
+            }
+            if (typeof options.precision === 'number') {
+                args = `-Zpr${options.precision} ${args}`;
+            }
+            if (typeof options.modelMaxCount === 'number') {
+                args = `-Zmc${options.modelMaxCount} ${args}`;
+            }
+            if (typeof options.recipLearningRate === 'number') {
+                args = `-Zlr${options.recipLearningRate} ${args}`;
+            }
+            if (typeof options.numAbbreviations === 'number') {
+                args = `-Zab${options.numAbbreviations} ${args}`;
             }
             if (options.preferTextOverJS) {
                 args = `-t text ${args}`;

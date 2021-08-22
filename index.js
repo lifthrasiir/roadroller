@@ -1096,6 +1096,7 @@ export class Packer {
     async optimize(progress) {
         const copy = v => JSON.parse(JSON.stringify(v));
 
+        let maxAbbreviations = -1;
         const calculateSize = current => {
             const inputsByType = { ...this.inputsByType };
             if (current.preferTextOverJS && (inputsByType.text || inputsByType.js)) {
@@ -1106,6 +1107,7 @@ export class Packer {
                 delete inputsByType.js;
             }
             const result = Packer.pack(inputsByType, { ...this.options, ...current });
+            if (maxAbbreviations < 0) maxAbbreviations = result.maxAbbreviations;
             return new Packed(result).estimateLength();
         };
 
@@ -1143,6 +1145,75 @@ export class Packer {
             return currentSize;
         };
 
+        // minimize f(x) assuming x is an integer and there's the global minimum where 0 < lo <= x <= hi.
+        // we don't know anything about f'(x), so we use a modified version of binary search
+        // where we pick three points in the range and assume that the smallest is closest to the minimum.
+        // the way to pick three points depends on the distribution and affects the search performance.
+        const search = async (lo, hi, dist, score) => {
+            // this midpoint function should satisfy x < mid(x, y) < y when x + 2 <= y.
+            // the linear case is obvious: trunc((x + y) / 2) = x + trunc((y - x) / 2) > x and < y.
+            // for the exponential case, it's equivalent to
+            //   (x + 1/2)^2 = x^2 + x + 1/4 < x * y < (y - 1/2)^2 = y^2 - y + 1/4.
+            // the lower bound is true because x * y = x^2 + x (y - x) >= x^2 + 2x > x^2 + x + 1/4;
+            // the upper bound is true because x * y = y^2 - y (y - x) <= y^2 - 2y < y^2 - y + 1/4.
+            let mid;
+            if (dist === 'exp') {
+                mid = (x, y) => Math.round(Math.sqrt(x * y));
+            } else { // dist === 'linear'
+                mid = (x, y) => (x + y) >> 1;
+            }
+
+            const cache = new Map();
+            // don't ask me about the ratio computation, this is just an approximation
+            const origRange = dist === 'exp' ? Math.log2(hi) - Math.log2(lo) + 1 : hi - lo;
+            const evaluate = async x => {
+                let y = cache.get(x);
+                if (!y) {
+                    const range = dist === 'exp' ? Math.log2(hi) - Math.log2(lo) + 1 : hi - lo;
+                    y = await score(x, 1 - Math.log(range) / Math.log(origRange));
+                    cache.set(x, y);
+                }
+                return y;
+            };
+
+            let q2 = mid(lo, hi);
+            while (hi - lo >= 4) {
+                const xx = [lo, mid(lo, q2), q2, mid(q2, hi), hi];
+                const yy = [];
+                for (const x of xx) yy.push(await evaluate(x));
+
+                let min = 0;
+                for (let i = 1; i < 5; ++i) {
+                    if (yy[min] > yy[i]) min = i;
+                }
+                if (min === 0) {
+                    hi = xx[1];
+                    q2 = mid(lo, hi);
+                } else if (min === 4) {
+                    lo = xx[3];
+                    q2 = mid(lo, hi);
+                } else {
+                    lo = xx[min - 1];
+                    q2 = xx[min];
+                    hi = xx[min + 1];
+                }
+            }
+            // make sure that everything in the final range has been evaluated
+            for (let x = lo + 1; x < hi; ++x) await evaluate(x);
+        };
+
+        // optimize modelMaxCount
+        await search(1, 32767, 'exp', async (i, ratio) => {
+            return await updateBestAndReportProgress({ ...best, modelMaxCount: i }, 'modelMaxCount', ratio);
+        });
+        if (best.modelMaxCount === this.options.modelMaxCount) delete best.modelMaxCount;
+
+        // optimize numAbbreviations
+        await search(0, maxAbbreviations, 'linear', async (i, ratio) => {
+            return await updateBestAndReportProgress({ ...best, numAbbreviations: i }, 'numAbbreviations', ratio);
+        });
+        if (best.numAbbreviations === this.options.numAbbreviations) delete best.numAbbreviations;
+
         // try to switch the JS input to text if any
         await updateBestAndReportProgress({ ...best, preferTextOverJS: true }, 'preferTextOverJS');
 
@@ -1176,6 +1247,18 @@ export class Packer {
 
             temperature *= 0.99;
         }
+
+        // optimize precision
+        await search(1, 21, 'linear', async (i, ratio) => {
+            return await updateBestAndReportProgress({ ...best, precision: i }, 'precision', ratio);
+        });
+        if (best.precision === this.options.precision) delete best.precision;
+
+        // optimize recipLearningRate
+        await search(1, 99999, 'exp', async (i, ratio) => {
+            return await updateBestAndReportProgress({ ...best, recipLearningRate: i }, 'recipLearningRate', ratio);
+        });
+        if (best.recipLearningRate === this.options.recipLearningRate) delete best.recipLearningRate;
 
         // apply the final result to this
         this.options = { ...this.options, ...best };
