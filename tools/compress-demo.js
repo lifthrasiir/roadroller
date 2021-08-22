@@ -20,7 +20,17 @@ const roadrollerCode = fs.readFileSync(await resolve('../index.js'), { encoding:
 const deflateCode = fs.readFileSync(await resolve('../deflate.js'), { encoding: 'utf-8' });
 const jsTokensCode = fs.readFileSync(await resolve('../js-tokens.js'), { encoding: 'utf-8' });
 
-let combinedJs = 
+const { code, vars } = await minifyJs(
+    stripModule(deflateCode) +
+    stripModule(jsTokensCode) +
+    stripModule(roadrollerCode) +
+    stripModule(script, true)
+);
+
+const ID_PATTERN = /(?<![a-z$\\])[ic]?\\*\$[a-zA-Z0-9_]+/g;
+
+const map = assignIds(html, vars);
+const combinedJs = remapIds(map,
     'document.write' +
     makeStringLiteral(
         '<style>' +
@@ -28,13 +38,7 @@ let combinedJs =
         '</style>' +
         minifyHtml(body)
     ) +
-    ';' +
-    await minifyJs(
-        stripModule(roadrollerCode) +
-        stripModule(deflateCode) +
-        stripModule(jsTokensCode) +
-        stripModule(script)
-    );
+    ';' + code);
 
 const selectors = defaultSparseSelectors();
 const packer = new Packer([{ type: 'js', action: 'eval', data: combinedJs }], {
@@ -42,7 +46,12 @@ const packer = new Packer([{ type: 'js', action: 'eval', data: combinedJs }], {
     maxMemoryMB: 150,
     arrayBufferPool: new ArrayBufferPool(),
 });
-//packer.optimizeSparseSelectors();
+if (false) { // doesn't improve much
+    const result = await packer.optimize(info => {
+        console.warn(`${info.bestSize} ${info.currentSize} ${JSON.stringify(info.current)}`);
+    });
+    console.warn(`${result.bestSize} - ${JSON.stringify(result.best)}`);
+}
 const { firstLine, secondLine } = packer.makeDecoder();
 
 const uncompressed = minifyHtml(preamble) + '<script>' + combinedJs + '</script>';
@@ -59,10 +68,30 @@ function minifyHtml(html) {
     return html.replace(/^\s+|\s*\n\s*|\s+$/g, '').replace(/<!--.*?-->/g, '');
 }
 
-function stripModule(js) {
+function stripModule(js, main) {
+    const SAFE_NAMES = [
+        'action',
+        'data',
+        'precision',
+        'type',
+    ];
+    const LIB_SAFE_NAMES = [
+        'abbr',
+        'closed',
+        'code',
+        'finished',
+        'options',
+        'quote',
+        'release',
+        'tag',
+        'update',
+        'value',
+    ];
+
     let code = '';
     let ignoreTilSemicolon = false;
     let ignoreNextDefault = false;
+    const safeNames = new Set(main ? SAFE_NAMES : SAFE_NAMES.concat(LIB_SAFE_NAMES));
     for (const token of jsTokens(js)) {
         if (ignoreNextDefault) {
             ignoreNextDefault = false;
@@ -81,7 +110,13 @@ function stripModule(js) {
             continue;
         }
         if (token.value === 'const' || token.value === 'let') {
+            // while this is generally not safe, the entire code base is
+            // intentionally written so that this is indeed safe
             token.value = 'var';
+        } else if (safeNames.has(token.value)) {
+            // rename properties which are also used as built-in DOM properties
+            // so Terser refuses to mangle them.
+            token.value += '_';
         }
         code += token.value;
     }
@@ -89,21 +124,53 @@ function stripModule(js) {
 }
 
 async function minifyJs(js) {
-    const result = await terser.minify({
+    const nameCache = {};
+    const { code } = await terser.minify({
         'roadroller.js': js,
     }, {
         ecma: 2018,
         toplevel: true,
         mangle: {
             toplevel: true,
+            properties: {
+                regex: /^[^$]+$/,
+                keep_quoted: 'strict',
+            },
         },
         compress: {
             passes: 5,
             unsafe: true,
             pure_getters: true,
         },
+        nameCache,
     });
-    return result.code;
+    const vars = Object.keys(nameCache.vars.props).map(k => nameCache.vars.props[k]);
+    return { code, vars };
+}
+
+function assignIds(html, vars) {
+    const ids = [...html.matchAll(ID_PATTERN)].map(([id]) => id.replace(/\\/g, ''));
+    const uniqIds = [...new Set(ids)].sort();
+
+    const ALPHABET = '_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const DIGIT = '0123456789';
+    const assignments = [];
+    done: for (const c1 of ALPHABET) {
+        for (const c2 of ALPHABET + DIGIT) {
+            if (!vars.includes(c1 + c2)) {
+                assignments.push(c1 + c2);
+                if (assignments.length >= uniqIds.length) break done;
+            }
+        }
+    }
+    return new Map(uniqIds.map((id, i) => [id, assignments[i]]));
+}
+
+function remapIds(map, s) {
+    return s.replace(ID_PATTERN, id => {
+        id = id.replace(/\\/g, '');
+        return map.get(id);
+    });
 }
 
 function minifyCss(style) {
