@@ -112,6 +112,9 @@ export function compressWithModel(input: ArrayLike<number>, model: Model, option
 export function decompressWithModel(output: Output, model: Model, options: CompressOptions): number[];
 
 export interface OptimizerProgressInfo<Params = number[]> {
+    pass: string;
+    passRatio?: number;
+    /** @deprecated Use {@link OptimizerProgressInfo.passRatio} instead */
     temperature: number;
     current: Params;
     currentSize: number;
@@ -128,6 +131,8 @@ export interface OptimizerResult<Params = number[]> {
 }
 
 export function defaultSparseSelectors(numContexts?: number): number[];
+
+/** @deprecated Use {@link Packer#optimize} instead */
 export function optimizeSparseSelectors(
     selectors: number[],
     calculateSize: (selectors: number[]) => number,
@@ -173,13 +178,23 @@ export interface PackerOptions {
     numAbbreviations?: number;
 }
 
+export interface OptimizedPackerOptions {
+    sparseSelectors: number[];
+}
+
 export class Packer {
     constructor(inputs: Input[], options: PackerOptions);
     readonly memoryUsageMB: number;
     makeDecoder(): Packed;
+
+    /** @deprecated */
     optimizeSparseSelectors(
         progress?: (info: OptimizerProgressInfo<number[]>) => undefined | boolean | Promise<undefined | boolean>,
     ): Promise<OptimizerResult<number[]>>;
+
+    optimize(
+        progress?: (info: OptimizerProgressInfo<OptimizedPackerOptions>) => undefined | boolean | Promise<undefined | boolean>,
+    ): Promise<OptimizerResult<OptimizedPackerOptions>>;
 }
 
 export interface Packed {

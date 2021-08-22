@@ -478,7 +478,13 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
     let bestSize = currentSize;
 
     if (progress) {
-        const info = { temperature: Infinity, current, currentSize, currentRejected: false, best, bestSize, bestUpdated: true };
+        const info = {
+            pass: 'sparseSelectors',
+            passRatio: 0,
+            temperature: Infinity,
+            current, currentSize, currentRejected: false,
+            best, bestSize, bestUpdated: true,
+        };
         if (await progress(info) === false) throw new Error('search aborted');
     }
 
@@ -506,7 +512,11 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
         // if size > currentSize then accept by some probability exp(delta / kT) < 1
         const rejected = Math.exp((currentSize - size) / (6 * temperature)) < Math.random();
         if (progress) {
-            const info = { temperature, current, currentSize: size, currentRejected: rejected, best, bestSize, bestUpdated };
+            const info = {
+                pass: 'sparseSelectors', passRatio: Math.log(temperature) / Math.log(0.1), temperature,
+                current, currentSize: size, currentRejected: rejected,
+                best, bestSize, bestUpdated,
+            };
             if (await progress(info) === false) throw new Error('search aborted');
         }
         if (rejected) {
@@ -1081,6 +1091,79 @@ export class Packer {
         }, progress);
         this.options.sparseSelectors = result.best;
         return result;
+    }
+
+    async optimize(progress) {
+        const copy = v => JSON.parse(JSON.stringify(v));
+
+        const calculateSize = current => {
+            const result = Packer.pack(this.inputsByType, { ...this.options, ...current });
+            return new Packed(result).estimateLength();
+        };
+
+        const reportProgress = async (pass, passRatio, current, currentSize, currentRejected, bestUpdated) => {
+            if (!progress) return;
+
+            const info = {
+                pass, passRatio, temperature: Infinity,
+                current, currentSize, currentRejected,
+                best, bestSize, bestUpdated,
+            };
+            if (await progress(info) === false) throw new Error('search aborted');
+        };
+
+        const searchStart = performance.now();
+
+        let best = {};
+        let bestSize = calculateSize(best);
+        await reportProgress('initial', undefined, best, bestSize, false, true);
+
+        const updateBest = current => {
+            const size = calculateSize(current);
+            let bestUpdated = false;
+            if (size < bestSize) {
+                best = copy(current);
+                bestSize = size;
+                bestUpdated = true;
+            }
+            return { size, bestUpdated };
+        };
+
+        // optimize sparseSelectors by simulated annealing
+        let current = this.options.sparseSelectors.slice();
+        let currentSize = bestSize;
+        const taboo = new Map();
+        let temperature = 1;
+        const targetTemperature = 0.1;
+        while (temperature > targetTemperature) {
+            const next = current.slice();
+
+            let added;
+            do {
+                added = Math.random() * AUTO_SELECTOR_LIMIT | 0;
+            } while (next.includes(added));
+            next[Math.random() * next.length | 0] = added;
+            next.sort((a, b) => a - b);
+
+            const { size: nextSize, bestUpdated } = updateBest({ ...best, sparseSelectors: next });
+            // if nextSize > currentSize then accept by some probability exp(delta / kT) < 1
+            const rejected = Math.exp((currentSize - nextSize) / (6 * temperature)) < Math.random();
+            await reportProgress(
+                'sparseSelectors', Math.log(temperature) / Math.log(targetTemperature),
+                { ...best, sparseSelectors: next }, nextSize,
+                rejected, bestUpdated);
+            if (!rejected) {
+                current = next;
+                currentSize = nextSize;
+            }
+
+            temperature *= 0.99;
+        }
+
+        // apply the final result to this
+        this.options = { ...this.options, ...best };
+
+        return { elapsedMsecs: performance.now() - searchStart, best, bestSize };
     }
 }
 

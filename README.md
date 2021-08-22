@@ -32,7 +32,7 @@ const options = {
 const packer = new Packer(inputs, options);
 
 // this typically takes about a minute, can be omitted if you want.
-packer.optimizeSparseSelectors();
+packer.optimize();
 
 const { firstLine, secondLine } = packer.makeDecoder();
 console.log(firstLine + '\n' + secondLine);
