@@ -44,8 +44,9 @@ Output options:
 -O|--optimize EFFORTS [Default: 0]
   Tries to tune parameters for this input.
     0               Use the baseline parameters.
-    1               Tries to optimize via simulated annealing.
-                    Also prints the best parameters unless -q is given.
+    1               Tries to optimize -S with a fixed number of attempts.
+                    Also tries to replace -t js with -t text if better.
+  Anything beyond -O0 prints the best parameters unless -q is given.
 -M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
   Configures the maximum memory usage.
   The actual usage might be lower. Use -v to print the actual usage.
@@ -260,6 +261,9 @@ async function parseArgs(args) {
 
 async function compress({ inputs, options, optimize, outputPath, verbose }) {
     let packer = new Packer(inputs, options);
+    const origLength = inputs.reduce((acc, { data } ) => {
+        return acc + (Array.isArray(data) ? data.length : unescape(encodeURIComponent(data)).length);
+    }, 0);
 
     if (verbose >= 1) {
         console.warn(
@@ -268,46 +272,55 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
     }
 
     if (optimize) {
-        // the js input can be freely changed to the text, see if it fares better
-        let preferText = false;
-        if (inputs[0].type === 'js') {
-            const origSize = packer.makeDecoder().estimateLength();
-            inputs[0].type = 'text';
-            const textPacker = new Packer(inputs, options);
-            const textSize = textPacker.makeDecoder().estimateLength();
-            inputs[0].type = 'js';
+        const defaultSelectorsJSON =
+            !options.sparseSelectors ?
+                JSON.stringify(defaultSparseSelectors()) :
+            options.sparseSelectors.length <= 12 ?
+                JSON.stringify(defaultSparseSelectors(options.sparseSelectors.length)) :
+                ''; // more than 13 selectors are randomly determined
 
-            if (textSize < origSize) {
-                if (verbose >= 0) console.warn(`switch the JS input to the text:`, textSize);
-                packer = textPacker;
-                preferText = true;
+        const format = options => {
+            let args;
+            if (!options.sparseSelectors) {
+                args = '-Sx12';
+            } else if (JSON.stringify(options.sparseSelectors) === defaultSelectorsJSON) {
+                args = `-Sx${options.sparseSelectors.length}`;
+            } else {
+                args = `-S${options.sparseSelectors.join(',')}`;
             }
-        }
+            if (options.preferTextOverJS) {
+                args = `-t text ${args}`;
+            }
+            return args;
+        };
 
-        const result = await packer.optimizeSparseSelectors(info => {
+        const result = await packer.optimize(info => {
             if (verbose < 0) return;
             console.warn(
-                (info.temperature > 1 ? '(baseline)' : `(T=${info.temperature.toFixed(4)})`) +
-                    ` trying ${JSON.stringify(info.current)}:`,
+                `(${info.pass}` +
+                (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '') +
+                `) ${format(info.current)}:`,
                 info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
         });
+
         if (verbose >= 0) {
+            const ratio = origLength > 0 ? 100 - result.bestSize / origLength * 100 : -Infinity;
             console.warn(
                 `search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ` +
-                `use \`${preferText ? '-t text ' : ''}-S ${result.best.join(',')}\` to replicate:`,
-                result.bestSize);
+                `use \`${format(result.best)}\` to replicate:`,
+                result.bestSize,
+                `(estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'})`);
         }
     }
 
     const packed = packer.makeDecoder();
     const output = packed.firstLine + '\n' + packed.secondLine;
-    const origLength = inputs.reduce((acc, { data } ) => {
-        return acc + (Array.isArray(data) ? data.length : unescape(encodeURIComponent(data)).length);
-    }, 0);
     const compressedLength = packed.estimateLength();
     const ratio = origLength > 0 ? 100 - compressedLength / origLength * 100 : -Infinity;
     if (!optimize && verbose >= 0) {
-        console.warn(`compressed ${origLength}B into ${compressedLength}B (estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'}).`);
+        console.warn(
+            `compressed ${origLength}B into ${compressedLength}B ` +
+            `(estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'}).`);
     }
     if (outputPath === '-') {
         console.log(output); // this includes a trailing newline, use the file output to get rid of it
