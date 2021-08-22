@@ -186,6 +186,7 @@ export interface Packed {
     readonly firstLine: string;
     readonly firstLineLengthInBytes: number;
     readonly secondLine: string;
+    readonly freeVars: string[];
     estimateLength(): number;
 }
 

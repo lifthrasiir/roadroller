@@ -250,12 +250,10 @@ function packAndEval(data, options = {}) {
     const type = options.type || 'js';
     const action = options.action || 'eval';
     const packer = new Packer([{ type, action, data }], { maxMemoryMB: 10, ...options });
-    const { firstLine, secondLine } = packer.makeDecoder();
+    const { firstLine, secondLine, freeVars } = packer.makeDecoder();
 
-    // XXX this is only okay-ish because we know the decoder internals
-    const possibleVars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
-    // Function doesn't inherit the strictness, which is required for Roadroller outputs
-    return Function('code', 'return eval(code)')(`let ${[...possibleVars].join(',')};${firstLine};${secondLine}`);
+    // Roadroller outputs use `with`, so we need to break the strictness inheritance with Function
+    return Function('code', 'return eval(code)')(`let ${freeVars.join(',')};${firstLine};${secondLine}`);
 }
 
 function packAndReturn(data, options = {}) {

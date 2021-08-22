@@ -1053,7 +1053,17 @@ export class Packer {
                 break;
         }
 
-        return new Packed({ firstLine, firstLineLengthInBytes: bufLengthInBytes, secondLine });
+        // C and i are bounded so they are not on this list
+        const freeVars = ['A', 'a', 'c', 'e', 'l', 'm', 'o', 'p', 'r', 't', 'u', 'w', 'x', 'y'];
+        if (quotes.length > 0) freeVars.push('f');
+        freeVars.sort();
+
+        return new Packed({
+            firstLine,
+            firstLineLengthInBytes: bufLengthInBytes,
+            secondLine,
+            freeVars,
+        });
     }
 
     async optimizeSparseSelectors(progress) {
@@ -1067,10 +1077,11 @@ export class Packer {
 }
 
 class Packed {
-    constructor({ firstLine, firstLineLengthInBytes, secondLine }) {
+    constructor({ firstLine, firstLineLengthInBytes, secondLine, freeVars }) {
         this.firstLine = firstLine;
         this.firstLineLengthInBytes = firstLineLengthInBytes;
         this.secondLine = secondLine;
+        this.freeVars = freeVars;
     }
 
     estimateLength() {
