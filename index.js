@@ -625,6 +625,7 @@ export class Packer {
                 (m, q) => q ? '\\x' + q.charCodeAt(0).toString(16).padStart(2, '0') : m);
 
         const identFreqs = new Map();
+        const inputTokens = [];
         for (const input of inputs) {
             const tokens = [];
 
@@ -687,7 +688,7 @@ export class Packer {
             }
 
             if ((tokens[tokens.length - 1] || {}).type === TYPE_LineTerminatorSequence) tokens.pop();
-            input.tokens = tokens;
+            inputTokens.push(tokens);
         }
 
         const unseenChars = new Set();
@@ -696,8 +697,8 @@ export class Packer {
             // we may have to need some space between two namelike tokens later.
             if (![32, 34, 39, 96].includes(i)) unseenChars.add(String.fromCharCode(i));
         }
-        for (const input of inputs) {
-            for (const token of input.tokens) {
+        for (const tokens of inputTokens) {
+            for (const token of tokens) {
                 for (const ch of token.value) unseenChars.delete(ch);
             }
         }
@@ -726,8 +727,8 @@ export class Packer {
         const NEED_SPACE_BEFORE = 1, NEED_SPACE_AFTER = 2;
         const needSpace = {};
         let consecutiveAbbrs = new Set(); // a set of two abbreviated chars appearing in a row
-        for (const input of inputs) {
-            for (const token of input.tokens) {
+        for (const tokens of inputTokens) {
+            for (const token of tokens) {
                 /*
                 if (token.value.match(/\$ROADROLLER.*\$/)) {
                     // $ROADROLLERnn$ gets replaced with the input nn
