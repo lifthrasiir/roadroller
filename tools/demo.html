@@ -100,7 +100,8 @@ input[type=number] { width: 5em; }
 <pre><span id=$output1></span><span id=$output2></span></pre>
 <aside id=$outputmessage></aside>
 <footer><ul>
-<li><!--<label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a></label> --><button id=$optimizecontexts>Optimize contexts</button> <a href=#optimize-contexts title=Help>ℹ️</a>
+<li><button id=$reset>Reset parameters</button> <button id=$optimize>Optimize parameters</button> <a href=#optimize title=Help>ℹ️</a>
+<!--<li><label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a>-->
 <li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>144</span> MB in use) <a href=#max-memory title=Help>ℹ️</a>
 </ul><details><summary>Advanced configuration</summary><ul>
 <!--<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>-->
@@ -163,7 +164,7 @@ input[type=number] { width: 5em; }
 <!--
 <p id=num-contexts><strong>Number of contexts</strong> relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
 -->
-<p id=optimize-contexts><strong>Optimize contexts</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
+<p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 <p id=max-memory><strong>Maximum memory usage</strong> configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
 
 <h3>Advanced Configuration</h3>
@@ -273,15 +274,21 @@ const initOutput = () => {
     $modelmaxcount.onchange = () => refreshOutput();
     $numabbrevs.onchange = () => refreshOutput();
 
-    $optimizecontexts.onclick = async () => {
+    $reset.onclick = () => {
+        for (const input of [$maxmemory, $selectors, $precision, $learningrate, $modelmaxcount, $numabbrevs]) {
+            input.value = input.getAttribute('value');
+        }
+        refreshOutput();
+    };
+    $optimize.onclick = async () => {
         if (optimizing) return;
         optimizing = true;
-        $optimizecontexts.disabled = true;
+        $reset.disabled = $optimize.disabled = true;
         try {
             await compress(true);
         } finally {
             optimizing = false;
-            $optimizecontexts.disabled = false;
+            $reset.disabled = $optimize.disabled = false;
         }
     };
 };
