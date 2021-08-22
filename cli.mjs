@@ -2,7 +2,7 @@
 
 import * as fs from 'fs';
 import * as process from 'process';
-import { ArrayBufferPool, Packer, defaultSparseSelectors } from './index.js';
+import { ArrayBufferPool, Packer, defaultSparseSelectors } from './index.mjs';
 
 let VERSION = 'unknown';
 try {

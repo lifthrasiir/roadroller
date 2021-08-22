@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import {
     AnsEncoder, AnsDecoder, DefaultModel, Packer,
     compressWithModel, decompressWithModel
-} from './index.js';
+} from './index.mjs';
 
 //------------------------------------------------------------------------------
 

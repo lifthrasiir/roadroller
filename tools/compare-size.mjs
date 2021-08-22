@@ -1,13 +1,13 @@
 // this script reads the Roadroller'd code (which should have exactly two lines) 
 // and runs various compression algorithms that return a DEFLATE stream.
-// requires regpack and @gfx/zopfli.
+// uses regpack and @gfx/zopfli if available.
 
 import * as zlib from 'zlib';
 import * as fs from 'fs';
 import * as process from 'process';
-import * as zopfli from '@gfx/zopfli';
-import { packer } from 'regpack';
-import { analyzeDeflate } from '../deflate.js';
+let zopfli; try { zopfli = await import('@gfx/zopfli'); } catch (e) { /* do nothing */ }
+let packer; try { packer = (await import('regpack')).packer; } catch (e) { /* do nothing */ }
+import { analyzeDeflate } from '../deflate.mjs';
 
 const data = fs.readFileSync(process.argv[2], 'utf-8').trim();
 const sep = data.indexOf('\n') + 1;
@@ -16,7 +16,7 @@ if (sep <= 0) throw 'oops';
 const buf = Uint8Array.from(data, c => c.charCodeAt(0));
 const buf1 = Uint8Array.from(data.slice(0, sep), c => c.charCodeAt(0));
 const buf2 = Uint8Array.from(data.slice(sep), c => c.charCodeAt(0));
-const buf2regpack = Uint8Array.from(doRegpack(data.slice(sep)), c => c.charCodeAt(0));
+const buf2regpack = packer && Uint8Array.from(doRegpack(data.slice(sep)), c => c.charCodeAt(0));
 
 // since the first line is not compressible except for the 6-bit packing,
 // we only need literal codes in the Huffman tree.
@@ -82,12 +82,20 @@ function doRegpack(input) {
 
 console.log('deflate with default flush', analyze(zlib.deflateSync(buf, { level: 9 })));
 console.log('deflate with optimal flush', analyze(await twoPartDeflate(buf1, buf2, { level: 9 })));
-console.log('deflate with optimal flush (regpack)', analyze(await twoPartDeflate(buf1, buf2regpack, { level: 9 })));
+if (buf2regpack) {
+    console.log('deflate with optimal flush (regpack)', analyze(await twoPartDeflate(buf1, buf2regpack, { level: 9 })));
+}
 console.log('deflate separately', Math.ceil(buf1.length * 6 / 8) + analyze(zlib.deflateSync(buf2, { level: 9 })));
 console.log('deflate separately (low)', Math.ceil(buf1.length * 6 / 8) + analyze(zlib.deflateSync(buf2, { level: 1 })));
-console.log('deflate separately (low, regpack)', Math.ceil(buf1.length * 6 / 8) + analyze(zlib.deflateSync(buf2regpack, { level: 1 })));
-console.log('no deflate (regpack)', Math.ceil(buf1.length * 6 / 8) + buf2regpack.length);
-console.log('zopfli 15', analyze(await zopfli.zlibAsync(buf, { numIterations: 15 })));
-console.log('zopfli 15 separately', Math.ceil(buf1.length * 6 / 8) + analyze(await zopfli.zlibAsync(buf2, { numIterations: 15 })));
-console.log('zopfli 15 separately (regpack)', Math.ceil(buf1.length * 6 / 8) + analyze(await zopfli.zlibAsync(buf2regpack, { numIterations: 15 })));
+if (buf2regpack) {
+    console.log('deflate separately (low, regpack)', Math.ceil(buf1.length * 6 / 8) + analyze(zlib.deflateSync(buf2regpack, { level: 1 })));
+    console.log('no deflate (regpack)', Math.ceil(buf1.length * 6 / 8) + buf2regpack.length);
+}
+if (zopfli) {
+    console.log('zopfli 15', analyze(await zopfli.zlibAsync(buf, { numIterations: 15 })));
+    console.log('zopfli 15 separately', Math.ceil(buf1.length * 6 / 8) + analyze(await zopfli.zlibAsync(buf2, { numIterations: 15 })));
+    if (buf2regpack) {
+        console.log('zopfli 15 separately (regpack)', Math.ceil(buf1.length * 6 / 8) + analyze(await zopfli.zlibAsync(buf2regpack, { numIterations: 15 })));
+    }
+}
 

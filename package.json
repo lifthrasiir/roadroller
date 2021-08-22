@@ -2,14 +2,18 @@
   "name": "roadroller",
   "version": "1.1.0",
   "description": "Flattens your JS demo",
-  "type": "module",
-  "main": "index.js",
+  "main": "index.cjs",
+  "module": "index.mjs",
   "types": "index.d.ts",
+  "exports": {
+    "import": "./index.mjs",
+    "require": "./index.cjs"
+  },
   "bin": {
-    "roadroller": "./cli.js"
+    "roadroller": "./cli.mjs"
   },
   "scripts": {
-    "compress-demo": "node tools/compress-demo.js",
+    "compress-demo": "node tools/compress-demo.mjs",
     "test": "ava",
     "prepare": "npm run compress-demo"
   },
@@ -22,5 +26,8 @@
     "ava": "4.0.0-alpha.2",
     "csso": "^4.2.0",
     "terser": "^5.7.1"
+  },
+  "dependencies": {
+    "esm": "^3.2.25"
   }
 }

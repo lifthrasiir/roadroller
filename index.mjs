@@ -14,9 +14,9 @@ import {
     TYPE_TemplateTail,
     TYPE_RegularExpressionLiteral,
     TYPE_Invalid,
-} from './js-tokens.js';
+} from './js-tokens.mjs';
 
-import { estimateDeflatedSize } from './deflate.js';
+import { estimateDeflatedSize } from './deflate.mjs';
 
 //------------------------------------------------------------------------------
 
