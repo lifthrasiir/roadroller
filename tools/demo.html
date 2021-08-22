@@ -50,6 +50,7 @@ fieldset>aside { font-size: 80%; color: red; padding: 0.2rem 0.5rem 0 0.5rem; or
 fieldset.c\$input>aside { background: #fff; }
 fieldset.c\$output>aside { background: #ffd07d; }
 fieldset.c\$outdated>pre { color: #1118; }
+#\$selectors { width: 20em; }
 input[type=number] { width: 5em; }
 </style>
 <!--<style>
@@ -101,8 +102,8 @@ input[type=number] { width: 5em; }
 <aside id=$outputmessage></aside>
 <footer><ul>
 <li><button id=$reset>Reset parameters</button> <button id=$optimize>Optimize parameters</button> <a href=#optimize title=Help>ℹ️</a>
-<!--<li><label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a>-->
-<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>144</span> MB in use) <a href=#max-memory title=Help>ℹ️</a>
+<li><label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a>
+<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>96</span> MB in use) <a href=#max-memory title=Help>ℹ️</a>
 </ul><details><summary>Advanced configuration</summary><ul>
 <!--<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>-->
 <li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+)+ value=> <a href=#chosen-contexts title=Help>ℹ️</a>
@@ -161,9 +162,7 @@ input[type=number] { width: 5em; }
 -->
 
 <h3>Output Configuration</h3>
-<!--
 <p id=num-contexts><strong>Number of contexts</strong> relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
--->
 <p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 <p id=max-memory><strong>Maximum memory usage</strong> configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
 
@@ -267,15 +266,43 @@ const makeInput = () => {
 };
 
 const initOutput = () => {
+    $numcontexts.onchange = () => {
+        const numContexts = parseInt($numcontexts.value, 10);
+        if (!(1 <= numContexts && numContexts <= 64)) throw 'invalid number of contexts';
+
+        const selectors = $selectors.value.split(/,/g).map(v => {
+            const sel = parseInt(v, 10);
+            return sel === sel ? sel : v;
+        });
+
+        // add (potentially more than required) selectors as needed
+        if (selectors.length < numContexts) {
+            const unusedDefaultSelectors = new Set(defaultSparseSelectors(12));
+            for (const sel of selectors) unusedDefaultSelectors.delete(sel);
+            selectors.push(...[...unusedDefaultSelectors].sort((a, b) => a - b));
+            while (selectors.length < numContexts) {
+                const added = Math.random() * 512 | 0;
+                if (!selectors.includes(added)) selectors.push(added);
+            }
+        }
+
+        // remove excess selectors at the end
+        $selectors.value = selectors.slice(0, numContexts).join(',');
+        refreshOutput();
+    };
+    $selectors.onchange = () => {
+        $numcontexts.value = $selectors.value.split(/,/g).length;
+        refreshOutput();
+    };
+
     $maxmemory.onchange = () => refreshOutput();
-    $selectors.onchange = () => refreshOutput();
     $precision.onchange = () => refreshOutput();
     $learningrate.onchange = () => refreshOutput();
     $modelmaxcount.onchange = () => refreshOutput();
     $numabbrevs.onchange = () => refreshOutput();
 
     $reset.onclick = () => {
-        for (const input of [$maxmemory, $selectors, $precision, $learningrate, $modelmaxcount, $numabbrevs]) {
+        for (const input of [$maxmemory, $numcontexts, $selectors, $precision, $learningrate, $modelmaxcount, $numabbrevs]) {
             input.value = input.getAttribute('value');
         }
         refreshOutput();
