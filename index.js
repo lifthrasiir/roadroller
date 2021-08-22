@@ -868,7 +868,7 @@ export class Packer {
         };
 
         const pow2 = n => {
-            if (n < 10) return '' + (1 << n);
+            if (n < 10 || n > precision + 10) return '' + (1 << n);
             // make use of M = 2^(precision+1) as much as possible
             n -= precision + 1;
             if (n < 0) return `M/${1 << -n}`;
@@ -939,6 +939,7 @@ export class Packer {
 
                 // 6. update contexts and weights with e and a (which is now the bit context)
                 //
+                // C: context hash
                 // i: model index (unique in the entire code)
                 `u.map((C,i)=>(` +
                     // update the bitwise context (we haven't updated a yet, so this is fine)
@@ -960,20 +961,31 @@ export class Packer {
             `for(` +
 
                 // m: sum of weighted probabilities
-                // u: the context hash
+                // u: an array of context hashes
                 (singleDigitSelectors ?
                     `u='${selectors.map(i => i.join('')).join('0')}'.split(m=0)`
                 :
                     `m=0,u=${JSON.stringify(selectors)}`
                 ) + `.map((C,i)=>` +
-                    `(y=0,` +
-                        (singleDigitSelectors ? `[...C]` : `C`) +
-                        `.map((C,i)=>(y=y*997+(o[l-C]|0)|0)),${pow2(contextBits)}-1&y*997+a` +
-                        (quotes.length > 0 ? '+!!f*129' : '') +
+                    // C: an array of context offsets (1: last byte, 2: second-to-last byte, ...)
+                    // i: model index 
+                    // y: context hash accumulator
+                    `(` +
+                        `y=0,` +
+                        `${singleDigitSelectors ? `[...C]` : `C`}.map((C,i)=>` +
+                            // C: context offset
+                            // redundant argument and parentheses exploit a common code fragment
+                            `(y=y*997+(o[l-C]|0)|0)` +
+                        `),` +
+                        `${pow2(contextBits)}-1&y*997+a${quotes.length > 0 ? '+!!f*129' : ''}` +
                     `)*${numModels}+i` +
                 `),` +
 
                 // calculate the mixed prediction m
+                //
+                // C: context hash
+                // i: model index 
+                // y: scratch variable
                 `x=u.map((C,i)=>(` +
                     `y=p[C]*2+1,` +
                     // stretch(prob), needed for updates
@@ -985,7 +997,7 @@ export class Packer {
 
                 // m: squash(sum of weighted preds) followed by adjustment
                 `m=~-M/(1+Math.exp(m))|1,` +
-                // decode the bit e
+                // e: decoded bit
                 `e=t%M<m,` +
                 `t=t%M+(e?m:M-m)*(t>>${precision + 1})-!e*m` +
             `;` +
