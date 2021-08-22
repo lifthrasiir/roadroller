@@ -654,11 +654,6 @@ export class Packer {
                     case TYPE_StringLiteral:
                     case TYPE_NoSubstitutionTemplate:
                         token.value = token.value[0] + reescape(token.value.slice(1, -1), token.value[0]) + token.value[0];
-                        try {
-                            forbiddenIdents.add((0, eval)(token.value));
-                        } catch {
-                            // the identifier likely has an invalid escape sequence, can ignore them
-                        }
                         break;
 
                     case TYPE_TemplateHead:
@@ -806,8 +801,8 @@ export class Packer {
     }
 
     static pack(inputsByType, options) {
-        const preparedText = Packer.prepareText(inputsByType.text || [], options);
-        const preparedJs = Packer.prepareJs(inputsByType.js || [], options);
+        const preparedText = Packer.prepareText(inputsByType['text'] || [], options);
+        const preparedJs = Packer.prepareJs(inputsByType['js'] || [], options);
         // TODO if we are to have multiple inputs they have to be splitted
         const combinedInput = [...preparedText.text, ...preparedJs.code].map(c => c.charCodeAt(0));
 
@@ -1022,7 +1017,7 @@ export class Packer {
         // also should clobber w and c to trigger the GC as soon as possible
         let outputVar = 'c'; // can be replaced with assignment statements if possible
 
-        const [input] = inputsByType.text || inputsByType.js;
+        const [input] = inputsByType['text'] || inputsByType['js'];
         switch (input.type) {
             case 'text':
                 outputVar = stringifiedInput(preparedText.utf8);
@@ -1103,12 +1098,12 @@ export class Packer {
         let maxAbbreviations = -1;
         const calculateSize = current => {
             const inputsByType = { ...this.inputsByType };
-            if (current.preferTextOverJS && (inputsByType.text || inputsByType.js)) {
-                inputsByType.text = [
-                    ...inputsByType.text || [],
-                    ...(inputsByType.js || []).map(input => ({ ...input, type: 'text' })),
+            if (current.preferTextOverJS && (inputsByType['text'] || inputsByType['js'])) {
+                inputsByType['text'] = [
+                    ...inputsByType['text'] || [],
+                    ...(inputsByType['js'] || []).map(input => ({ ...input, type: 'text' })),
                 ];
-                delete inputsByType.js;
+                delete inputsByType['js'];
             }
             const result = Packer.pack(inputsByType, { ...this.options, ...current });
             if (maxAbbreviations < 0) maxAbbreviations = result.maxAbbreviations;
@@ -1153,6 +1148,8 @@ export class Packer {
         // we don't know anything about f'(x), so we use a modified version of binary search
         // where we pick three points in the range and assume that the smallest is closest to the minimum.
         // the way to pick three points depends on the distribution and affects the search performance.
+        const EXP = 1;
+        const LINEAR = 0;
         const search = async (lo, hi, dist, score) => {
             // this midpoint function should satisfy x < mid(x, y) < y when x + 2 <= y.
             // the linear case is obvious: trunc((x + y) / 2) = x + trunc((y - x) / 2) > x and < y.
@@ -1161,7 +1158,7 @@ export class Packer {
             // the lower bound is true because x * y = x^2 + x (y - x) >= x^2 + 2x > x^2 + x + 1/4;
             // the upper bound is true because x * y = y^2 - y (y - x) <= y^2 - 2y < y^2 - y + 1/4.
             let mid;
-            if (dist === 'exp') {
+            if (dist === EXP) {
                 mid = (x, y) => Math.round(Math.sqrt(x * y));
             } else { // dist === 'linear'
                 mid = (x, y) => (x + y) >> 1;
@@ -1169,11 +1166,11 @@ export class Packer {
 
             const cache = new Map();
             // don't ask me about the ratio computation, this is just an approximation
-            const origRange = dist === 'exp' ? Math.log2(hi) - Math.log2(lo) + 1 : hi - lo;
+            const origRange = dist === EXP ? Math.log2(hi) - Math.log2(lo) + 1 : hi - lo;
             const evaluate = async x => {
                 let y = cache.get(x);
                 if (!y) {
-                    const range = dist === 'exp' ? Math.log2(hi) - Math.log2(lo) + 1 : hi - lo;
+                    const range = dist === EXP ? Math.log2(hi) - Math.log2(lo) + 1 : hi - lo;
                     y = await score(x, 1 - Math.log(range) / Math.log(origRange));
                     cache.set(x, y);
                 }
@@ -1207,13 +1204,13 @@ export class Packer {
         };
 
         // optimize modelMaxCount
-        await search(1, 32767, 'exp', async (i, ratio) => {
+        await search(1, 32767, EXP, async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, modelMaxCount: i }, 'modelMaxCount', ratio);
         });
         if (best.modelMaxCount === this.options.modelMaxCount) delete best.modelMaxCount;
 
         // optimize numAbbreviations
-        await search(0, maxAbbreviations, 'linear', async (i, ratio) => {
+        await search(0, maxAbbreviations, LINEAR, async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, numAbbreviations: i }, 'numAbbreviations', ratio);
         });
         if (best.numAbbreviations === this.options.numAbbreviations) delete best.numAbbreviations;
@@ -1253,25 +1250,25 @@ export class Packer {
         }
 
         // optimize precision
-        await search(1, 21, 'linear', async (i, ratio) => {
+        await search(1, 21, LINEAR, async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, precision: i }, 'precision', ratio);
         });
         if (best.precision === this.options.precision) delete best.precision;
 
         // optimize recipLearningRate
-        await search(1, 99999, 'exp', async (i, ratio) => {
+        await search(1, 99999, EXP, async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, recipLearningRate: i }, 'recipLearningRate', ratio);
         });
         if (best.recipLearningRate === this.options.recipLearningRate) delete best.recipLearningRate;
 
         // apply the final result to this
         this.options = { ...this.options, ...best };
-        if (best.preferTextOverJS && (this.inputsByType.text || this.inputsByType.js)) {
-            this.inputsByType.text = [
-                ...this.inputsByType.text || [],
-                ...(this.inputsByType.js || []).map(input => ({ ...input, type: 'text' })),
+        if (best.preferTextOverJS && (this.inputsByType['text'] || this.inputsByType['js'])) {
+            this.inputsByType['text'] = [
+                ...this.inputsByType['text'] || [],
+                ...(this.inputsByType['js'] || []).map(input => ({ ...input, type: 'text' })),
             ];
-            delete this.inputsByType.js;
+            delete this.inputsByType['js'];
         }
 
         return { elapsedMsecs: performance.now() - searchStart, best, bestSize };
