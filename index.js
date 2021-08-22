@@ -358,7 +358,7 @@ export class DefaultModel extends LogisticMixModel {
     constructor(options) {
         const { inBits, sparseSelectors, modelQuotes } = options;
         const models = sparseSelectors.map(sparseSelector => {
-            return new SparseContextModel({ sparseSelector, ...options });
+            return new SparseContextModel({ ...options, sparseSelector });
         });
         super(models, options);
 
@@ -536,6 +536,11 @@ export const optimizeSparseSelectors = async (selectors, calculateSize, progress
 const predictionBytesPerContext = options => (options.precision <= 8 ? 1 : options.precision <= 16 ? 2 : 4);
 const countBytesPerContext = options => (options.modelMaxCount < 128 ? 1 : options.modelMaxCount < 32768 ? 2 : 4);
 
+const contextBitsFromMaxMemory = options => {
+    const bytesPerContext = predictionBytesPerContext(options) + countBytesPerContext(options);
+    return Math.log2(options.maxMemoryMB / options.sparseSelectors.length / bytesPerContext) + 20 | 0;
+};
+
 // String.fromCharCode(...array) is short but doesn't work when array.length is "long enough".
 // the threshold is implementation-defined, but 2^16 - epsilon seems common.
 const TEXT_DECODER_THRESHOLD = 65000;
@@ -554,10 +559,6 @@ export class Packer {
             arrayBufferPool: options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
         };
-        if (!this.options.contextBits) {
-            const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
-            this.options.contextBits = Math.log2(this.options.maxMemoryMB / this.options.sparseSelectors.length / bytesPerContext) + 20 | 0;
-        }
 
         this.inputsByType = {};
         this.evalInput = null;
@@ -599,8 +600,9 @@ export class Packer {
     }
 
     get memoryUsageMB() {
+        const contextBits = this.options.contextBits || contextBitsFromMaxMemory(this.options);
         const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
-        return this.options.sparseSelectors.length * bytesPerContext * (1 << this.options.contextBits) / 1048576;
+        return this.options.sparseSelectors.length * bytesPerContext * (1 << contextBits) / 1048576;
     }
 
     static prepareText(inputs) {
@@ -813,9 +815,10 @@ export class Packer {
         // TODO again, this should be controlled dynamically
         const modelQuotes = preparedJs.code.length > 0;
 
-        const { sparseSelectors, contextBits, precision, modelMaxCount, recipLearningRate } = options;
+        const { sparseSelectors, precision, modelMaxCount, recipLearningRate } = options;
+        const contextBits = options.contextBits || contextBitsFromMaxMemory(options);
 
-        const compressOptions = { inBits, outBits, modelQuotes, ...options };
+        const compressOptions = { ...options, inBits, outBits, modelQuotes, contextBits };
         const model = new DefaultModel(compressOptions);
         const { buf, state, inputLength, bufLengthInBytes } = compressWithModel(combinedInput, model, compressOptions);
 
