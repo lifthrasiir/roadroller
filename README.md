@@ -31,7 +31,7 @@ const options = {
 
 const packer = new Packer(inputs, options);
 
-// this typically takes about a minute, can be omitted if you want.
+// this typically takes about a minute or two, can be omitted if you want.
 packer.optimize();
 
 const { firstLine, secondLine } = packer.makeDecoder();
@@ -103,13 +103,13 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 ### Output Configuration
 
-<!--**Number of contexts** (CLI `-S|--selectors xCOUNT`) relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.-->
+**Number of contexts** (CLI `-S|--selectors xCOUNT`) relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
 
-**Optimize contexts** (CLI `-O|--optimize 1`, API `Packer.optimizeSparseContexts`) searches for better modelling parameters. If parameters are already given the optimizer will try to improve upon that. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
+**Optimize contexts** (CLI `-O|--optimize 1`, API `Packer.optimize`) searches for better modelling parameters. If parameters are already given the optimizer will try to improve upon that. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 
 * The additional argument in the CLI indicates the level of efforts, which can be 0 (do nothing) or 1 (use the default setting, takes about a minute); other values are reserved for the future expansion. The resulting parameters are printed at the end which can be reused for faster iteration.
 
-* While not strictly required, `Packer.optimizeSparseContexts` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
+* While not strictly required, `Packer.optimize` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
 
 **Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture; `-v` will print the actual memory usage to stderr. The default is 150 MB.
 
