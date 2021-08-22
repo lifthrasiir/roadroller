@@ -1097,7 +1097,15 @@ export class Packer {
         const copy = v => JSON.parse(JSON.stringify(v));
 
         const calculateSize = current => {
-            const result = Packer.pack(this.inputsByType, { ...this.options, ...current });
+            const inputsByType = { ...this.inputsByType };
+            if (current.preferTextOverJS && (inputsByType.text || inputsByType.js)) {
+                inputsByType.text = [
+                    ...inputsByType.text || [],
+                    ...(inputsByType.js || []).map(input => ({ ...input, type: 'text' })),
+                ];
+                delete inputsByType.js;
+            }
+            const result = Packer.pack(inputsByType, { ...this.options, ...current });
             return new Packed(result).estimateLength();
         };
 
@@ -1128,6 +1136,15 @@ export class Packer {
             }
             return { size, bestUpdated };
         };
+
+        const updateBestAndReportProgress = async (current, pass, passRatio) => {
+            const { size: currentSize, bestUpdated } = updateBest(current);
+            await reportProgress(pass, passRatio, current, currentSize, !bestUpdated, bestUpdated);
+            return currentSize;
+        };
+
+        // try to switch the JS input to text if any
+        await updateBestAndReportProgress({ ...best, preferTextOverJS: true }, 'preferTextOverJS');
 
         // optimize sparseSelectors by simulated annealing
         let current = this.options.sparseSelectors.slice();
@@ -1162,6 +1179,13 @@ export class Packer {
 
         // apply the final result to this
         this.options = { ...this.options, ...best };
+        if (best.preferTextOverJS && (this.inputsByType.text || this.inputsByType.js)) {
+            this.inputsByType.text = [
+                ...this.inputsByType.text || [],
+                ...(this.inputsByType.js || []).map(input => ({ ...input, type: 'text' })),
+            ];
+            delete this.inputsByType.js;
+        }
 
         return { elapsedMsecs: performance.now() - searchStart, best, bestSize };
     }

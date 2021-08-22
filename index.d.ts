@@ -180,6 +180,7 @@ export interface PackerOptions {
 
 export interface OptimizedPackerOptions {
     sparseSelectors: number[];
+    preferTextOverJS?: boolean;
 }
 
 export class Packer {
