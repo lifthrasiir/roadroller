@@ -32,7 +32,7 @@ const options = {
 const packer = new Packer(inputs, options);
 
 // this typically takes about a minute or two, can be omitted if you want.
-packer.optimize();
+await packer.optimize();
 
 const { firstLine, secondLine } = packer.makeDecoder();
 console.log(firstLine + '\n' + secondLine);
