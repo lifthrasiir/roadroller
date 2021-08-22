@@ -371,33 +371,45 @@ const compress = async optimize => {
 
         if (optimize) {
             let tick = 0;
-            const result = await packer.optimizeSparseSelectors(async info => {
+            const result = await packer.optimize(async info => {
                 const clock = 0x1f550 + tick++ % 12;
-                updateOutput(`${String.fromCodePoint(clock)} optimizing: `, origLength, info.bestSize);
+                const pass = info.pass + (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '');
+                updateOutput(`${String.fromCodePoint(clock)} optimizing ${pass}: `, origLength, info.bestSize);
                 console.info(
-                    `(T=${info.temperature.toFixed(4)}) trying ${JSON.stringify(info.current)}:`,
-                    info.currentSize, info.bestUpdated ? '<-' : info.rejected ? 'x' : '');
+                    `(${pass}) ${JSON.stringify(info.current)}:`, info.currentSize,
+                    ...info.bestUpdated ? ['<-'] : info.currentRejected ? ['x'] : []);
                 await new Promise(resolve => requestAnimationFrame(resolve));
             });
             prefix = `optimized in ${(result.elapsedMsecs / 1000).toFixed(1)}s: `;
-            sparseSelectors = result.best; // so that we can run optimize multiple times
+
+            // update the UI so that we can run optimizer multiple times
+            if (result.best.sparseSelectors) sparseSelectors = result.best.sparseSelectors;
+            if (result.best.precision) $precision.value = result.best.precision;
+            if (result.best.modelMaxCount) $modelmaxcount.value = result.best.modelMaxCount;
+            if (result.best.recipLearningRate) $learningrate.value = result.best.recipLearningRate;
+            if (result.best.numAbbreviations !== undefined) $numabbrevs.value = result.best.numAbbreviations;
+            if (result.best.preferTextOverJS) {
+                for (const input of $inputs.children) {
+                    if (input.i$type.value === 'js') input.i$type.value = 'text';
+                }
+            }
         }
 
         $selectors.value = sparseSelectors.join(',');
 
-        const { firstLine, firstLineLengthInBytes, secondLine } = packer.makeDecoder();
+        const packed = packer.makeDecoder();
         if (!optimize && lastRefreshTicks !== refreshTicks) return;
-        output = firstLine + '\n' + secondLine;
-        $output1.textContent = firstLine + '\n';
-        $output2.textContent = secondLine;
-        const compressedLength = firstLineLengthInBytes + estimateDeflatedSize(secondLine);
-        updateOutput(prefix, origLength, compressedLength);
+        output = packed.firstLine + '\n' + packed.secondLine;
+        $output1.textContent = packed.firstLine + '\n';
+        $output2.textContent = packed.secondLine;
+        updateOutput(prefix, origLength, packed.estimateLength());
 
         $newwindow.hidden = false;
     } catch (e) {
         $outputsize.textContent = 'failed';
         $outputmessage.textContent = 'Error: ' + e;
         $output1.textContent = $output2.textContent = '';
+        console.error(e);
     } finally {
         if (lastRefreshTicks === refreshTicks) {
             $output.classList.remove('c$outdated');
