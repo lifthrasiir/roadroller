@@ -1093,7 +1093,13 @@ class Packed {
     }
 
     estimateLength() {
-        return this.firstLineLengthInBytes + estimateDeflatedSize(this.secondLine);
+        // the first line is mostly 6-bit code, but there are additional characters
+        // so one of the 6-bit code literal has to be encoded in 7 bits.
+        // if the original data is N bytes the first line will contain about 4/3 N codes,
+        // 1/64 of which will have to use one additional bit.
+        // therefore the estimated overhead is 4/3 N * 1/64 [bits] = N/384 [bytes].
+        // the additional 35 bytes are experimentally derived from the Huffman tree coding.
+        return 35 + Math.ceil(this.firstLineLengthInBytes * (1 + 1/384)) + estimateDeflatedSize(this.secondLine);
     }
 }
 

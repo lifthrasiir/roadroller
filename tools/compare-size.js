@@ -36,7 +36,7 @@ function twoPartDeflate(buf1, buf2, options) {
 }
 
 function analyze(buf) {
-    console.log([...analyzeDeflate(1, buf)].map(i => i[0] / 8));
+    console.log([...analyzeDeflate('zlib', buf)].map(i => [i[0] / 8, i.slice(1).reduce((x,[y]) => x + y, 0) / 8]));
     return buf.length;
 }
 
