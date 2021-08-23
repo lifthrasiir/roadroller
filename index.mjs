@@ -20,6 +20,32 @@ import { estimateDeflatedSize } from './deflate.mjs';
 
 //------------------------------------------------------------------------------
 
+// returns clamp(0, floor(log2(x/y)), 31) where x and y are integers.
+// not prone to floating point errors.
+const floorLog2 = (x, y = 1) => {
+    let n = 0;
+    if (x >= y * 65536) y *= 65536, n += 16;
+    if (x >= y * 256) y *= 256, n += 8;
+    if (x >= y * 16) y *= 16, n += 4;
+    if (x >= y * 4) y *= 4, n += 2;
+    if (x >= y * 2) n += 1;
+    return n;
+};
+
+// returns clamp(1, ceil(log2(x/y)), 32) where x and y are integers.
+// not prone to floating point errors.
+const ceilLog2 = (x, y = 1) => {
+    let n = 1;
+    if (x > y * 65536) y *= 65536, n += 16;
+    if (x > y * 256) y *= 256, n += 8;
+    if (x > y * 16) y *= 16, n += 4;
+    if (x > y * 4) y *= 4, n += 2;
+    if (x > y * 2) n += 1;
+    return n;
+};
+
+//------------------------------------------------------------------------------
+
 export class ArrayBufferPool {
     constructor() {
         // pool.get(size) is an array of ArrayBuffer of given size
@@ -187,7 +213,7 @@ export class DirectContextModel {
 
         this.arrayBufferPool = arrayBufferPool;
         this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
-        this.counts = newUintArray(arrayBufferPool, this, Math.ceil(Math.log2(modelMaxCount + 1)), 1 << contextBits);
+        this.counts = newUintArray(arrayBufferPool, this, ceilLog2(modelMaxCount + 1), 1 << contextBits);
 
         if (arrayBufferPool) {
             // we need to initialize the array since it may have been already used,
@@ -583,7 +609,7 @@ const countBytesPerContext = options => (options.modelMaxCount < 128 ? 1 : optio
 
 const contextBitsFromMaxMemory = options => {
     const bytesPerContext = predictionBytesPerContext(options) + countBytesPerContext(options);
-    return Math.log2(options.maxMemoryMB / options.sparseSelectors.length / bytesPerContext) + 20 | 0;
+    return floorLog2(options.maxMemoryMB * 1048576, options.sparseSelectors.length * bytesPerContext);
 };
 
 // String.fromCharCode(...array) is short but doesn't work when array.length is "long enough".
