@@ -186,8 +186,8 @@ input[type=number] { width: 5em; }
 Roadroller is brought to you by <a href=https://mearie.org/><svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 182 186"><path d="M0 0h54v102H19v52h35v32H0m34-70h20v24H34"/><path d="M64 0h54v1e2a22 22 0 000 56v30H64m54-72a12 12 0 000 28v-28"/><path d="M128 0h54v102h-33v12h33v8h-33v32h33v32h-54m35-52h19v8h-19"/></svg>Kang Seonghoon</a>.
 
 <script type=module>
-import { ArrayBufferPool, DefaultModel, defaultSparseSelectors, Packer } from '../index.js';
-import { estimateDeflatedSize } from '../deflate.js';
+import { ArrayBufferPool, DefaultModel, defaultSparseSelectors, Packer } from '../index.mjs';
+import { estimateDeflatedSize } from '../deflate.mjs';
 
 let arrayBufferPool = new ArrayBufferPool();
 

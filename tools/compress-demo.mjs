@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { URL } from 'url';
 import csso from 'csso';
 import * as terser from 'terser';
-import { jsTokens, TYPE_LineTerminatorSequence } from '../js-tokens.mjs';
+import { jsTokens, TYPE_RegularExpressionLiteral, TYPE_LineTerminatorSequence } from '../js-tokens.mjs';
 import { ArrayBufferPool, defaultSparseSelectors, Packer } from '../index.mjs';
 
 const html = fs.readFileSync(await resolve('demo.html'), { encoding: 'utf-8' });
@@ -30,15 +30,16 @@ const { code, vars } = await minifyJs(
 const ID_PATTERN = /(?<![a-z$\\])[ic]?\\*\$[a-zA-Z0-9_]+/g;
 
 const map = assignIds(html, vars);
-const combinedJs = remapIds(map,
+const combinedJs =
     'document.write' +
-    makeStringLiteral(
+    remapIds(map, makeStringLiteral(
         '<style>' +
         minifyCss(style) +
         '</style>' +
         minifyHtml(body)
-    ) +
-    ';' + code);
+    )) +
+    ';' +
+    remapIdsInJs(map, code);
 
 const selectors = defaultSparseSelectors();
 const packer = new Packer([{ type: 'js', action: 'eval', data: combinedJs }], {
@@ -171,6 +172,17 @@ function remapIds(map, s) {
         id = id.replace(/\\/g, '');
         return map.get(id);
     });
+}
+
+function remapIdsInJs(map, s) {
+    const tokens = [];
+    for (const token of jsTokens(s)) {
+        if (token.type !== TYPE_RegularExpressionLiteral) {
+            token.value = remapIds(map, token.value);
+        }
+        tokens.push(token.value);
+    }
+    return tokens.join('');
 }
 
 function minifyCss(style) {
