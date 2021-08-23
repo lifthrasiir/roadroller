@@ -94,6 +94,7 @@ export class DefaultModel implements LogisticMixModel {
 
 export interface CompressOptions extends AnsOptions {
     inBits: number;
+    preset?: number[];
     calculateByteEntropy?: boolean;
 }
 

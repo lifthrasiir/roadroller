@@ -394,8 +394,17 @@ export class DefaultModel extends LogisticMixModel {
 //------------------------------------------------------------------------------
 
 export const compressWithModel = (input, model, options) => {
-    const { inBits, outBits, precision, calculateByteEntropy } = options;
+    const { inBits, outBits, precision, preset = [], calculateByteEntropy } = options;
     const encoder = new AnsEncoder(options);
+
+    for (let offset = 0; offset < preset.length; ++offset) {
+        const code = preset[offset];
+        for (let i = inBits - 1; i >= 0; --i) {
+            model.predict();
+            model.update((code >> i) & 1);
+        }
+        model.flushByte(code, inBits);
+    }
 
     const byteProbs = [];
     for (let offset = 0; offset < input.length; ++offset) {
@@ -429,8 +438,17 @@ export const compressWithModel = (input, model, options) => {
 };
 
 export const decompressWithModel = ({ state, buf, inputLength }, model, options) => {
-    const { inBits } = options;
+    const { inBits, preset = [] } = options;
     const decoder = new AnsDecoder({ state, buf }, options);
+
+    for (let offset = 0; offset < preset.length; ++offset) {
+        const code = preset[offset];
+        for (let i = inBits - 1; i >= 0; --i) {
+            model.predict();
+            model.update((code >> i) & 1);
+        }
+        model.flushByte(code, inBits);
+    }
 
     const reconstructed = [];
     for (let offset = 0; offset < inputLength; ++offset) {
