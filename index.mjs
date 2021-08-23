@@ -80,7 +80,9 @@ const newUintArray = (pool, parent, nbits, length) => {
 
 //------------------------------------------------------------------------------
 
-const getAnsL = outBits => 1 << (28 - outBits);
+// this is slightly configurable (ryg_rans equivalent would be 31),
+// but we already have too many parameters.
+const ANS_BITS = 28;
 
 // roughly based on https://github.com/rygorous/ryg_rans/blob/master/rans_byte.h
 export class AnsEncoder {
@@ -88,7 +90,7 @@ export class AnsEncoder {
         // all input frequencies are assumed to be scaled by 2^precision
         this.precision = precision;
 
-        // the number of output bits
+        // the number of output bits, or -(the number of output symbols) if negative
         this.outBits = outBits;
 
         // the bits and corresponding frequencies to be written.
@@ -120,14 +122,13 @@ export class AnsEncoder {
         }
         this.finished = true;
 
-        // the lower bound of the normalized interval
-        const L = getAnsL(this.outBits);
-        const MASK = (1 << this.outBits) - 1;
+        const outSymbols = this.outBits < 0 ? -this.outBits : 1 << this.outBits;
 
-        let state = L;
+        let state = 1 << (ANS_BITS - ceilLog2(outSymbols));
 
         const buf = [];
         const probScale = this.precision + 1;
+        const stateShift = ANS_BITS - ceilLog2(outSymbols) - probScale;
         for (const { bit, predictedFreq } of this.input.reverse()) {
             // example: if precision=2, freq={0, 1, 2, 3} map to prob={1/8, 3/8, 5/8, 7/8}.
             // this adjustment is used to avoid the probability of exactly 0 or 1.
@@ -143,10 +144,10 @@ export class AnsEncoder {
             }
 
             // renormalize
-            const maxState = (L >> probScale << this.outBits) * size;
+            const maxState = size * outSymbols << stateShift;
             while (state >= maxState) {
-                buf.push(state & MASK);
-                state >>= this.outBits;
+                buf.push(state % outSymbols);
+                state = (state / outSymbols) | 0;
             }
 
             // add the bit to the state
@@ -167,8 +168,8 @@ export class AnsDecoder {
         this.buf = buf;
         this.offset = 0;
         this.precision = precision;
-        this.outBits = outBits;
-        this.L = getAnsL(this.outBits);
+        this.outSymbols = outBits < 0 ? -outBits : 1 << outBits;
+        this.renormLimit = 1 << (ANS_BITS - ceilLog2(this.outSymbols));
     }
 
     readBit(predictedFreq) {
@@ -190,12 +191,12 @@ export class AnsDecoder {
         this.state = size * (this.state >> probScale) + rem - start;
 
         // renormalize
-        while (this.state < this.L) {
+        while (this.state < this.renormLimit) {
             if (this.offset >= this.buf.length) {
                 throw new Error('AnsDecoder.readBit: out of buffer bounds');
             }
-            this.state <<= this.outBits;
-            this.state |= this.buf[this.offset++] & ((1 << this.outBits) - 1);
+            this.state *= this.outSymbols;
+            this.state += this.buf[this.offset++] % this.outSymbols;
         }
 
         return bit;
@@ -486,7 +487,7 @@ export const compressWithModel = (input, model, options) => {
         byteEntropy = byteProbs.map(prob => (precision + 1) * inBits - Math.log2(prob));
     }
 
-    const bufLengthInBytes = Math.ceil(buf.length * outBits / 8);
+    const bufLengthInBytes = Math.ceil(buf.length * (outBits < 0 ? Math.log2(-outBits) : outBits) / 8);
     return { state, buf, inputLength: input.length, bufLengthInBytes, byteEntropy };
 };
 

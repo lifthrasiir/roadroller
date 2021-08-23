@@ -63,7 +63,8 @@ function testAnsRoundtrip(outBits, precision) {
             encoder.writeBit(bit, freq);
         }
         const { state, buf, bufLenInBytes } = encoder.finish();
-        t.assert(buf.every(c => 0 <= c && c < (1 << outBits)));
+        const numSymbols = outBits < 0 ? -outBits : 1 << outBits;
+        t.assert(buf.every(c => 0 <= c && c < numSymbols));
 
         const decoder = new AnsDecoder({ state, buf }, options);
         for (const { bit, pred } of bits) {
@@ -86,6 +87,13 @@ testAnsRoundtrip(6, 16);
 testAnsRoundtrip(7, 16);
 testAnsRoundtrip(8, 16);
 testAnsRoundtrip(8, 12);
+
+// non-power-of-two outBits should equally work
+testAnsRoundtrip(-10, 16);
+testAnsRoundtrip(-33, 16);
+testAnsRoundtrip(-96, 16);
+testAnsRoundtrip(-345, 16);
+testAnsRoundtrip(-1000, 16);
 
 //------------------------------------------------------------------------------
 
