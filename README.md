@@ -145,7 +145,7 @@ Roadroller itself and resulting packed codes are ECMAScript 2015 (ES6) compatibl
 
 Roadroller and packed codes extensively use `Math.exp` and `Math.log` that are [implementation-approximated](https://262.ecma-international.org/#implementation-approximated), so there is a small but real possibility that they behave differently in different implementations. This is known to be a non-issue for browser JS engines as well as V8 and node.js as they use the same math library (fdlibm) for those functions, but you have been warned.
 
-By comparison, the Roadroller CLI assumes more from the environment and probably requires Node.js 14 or later (only tested with 16).
+By comparison, the Roadroller CLI assumes more from the environment and requires Node.js 14 or later.
 
 ## Internals
 

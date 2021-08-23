@@ -35,7 +35,7 @@
   "author": "Kang Seonghoon <public+roadroller@mearie.org>",
   "license": "MIT",
   "engines": {
-    "node": ">=16"
+    "node": ">=14"
   },
   "devDependencies": {
     "ava": "4.0.0-alpha.2",
