@@ -98,13 +98,10 @@ testAnsRoundtrip(-1000, 16);
 //------------------------------------------------------------------------------
 
 class SimpleModel {
-    constructor(t, { inBits, precision }) {
-        this.t = t;
+    constructor({ inBits, precision }) {
         this.inBits = inBits;
         this.precision = precision;
         this.ones = this.zeroes = 1;
-        this.bitsSinceFlush = 0;
-        this.numBitsSinceFlush = 0;
     }
 
     predict() {
@@ -117,12 +114,29 @@ class SimpleModel {
         } else {
             ++this.zeroes;
         }
+    }
+
+    flushByte(currentByte, inBits) {
+    }
+}
+
+class CheckedSimpleModel extends SimpleModel {
+    constructor(t, options) {
+        super(options);
+        this.t = t;
+        this.bitsSinceFlush = 0;
+        this.numBitsSinceFlush = 0;
+    }
+
+    update(actualBit) {
+        super.update(actualBit);
         this.bitsSinceFlush = (this.bitsSinceFlush << 1) | actualBit;
         ++this.numBitsSinceFlush;
         this.t.assert(this.numBitsSinceFlush <= this.inBits);
     }
 
     flushByte(currentByte, inBits) {
+        super.flushByte(currentByte, inBits);
         this.t.is(inBits, this.inBits);
         this.t.is(inBits, this.numBitsSinceFlush);
         this.t.is(currentByte, this.bitsSinceFlush);
@@ -146,14 +160,14 @@ class SimpleModel {
     }
 }
 
-class SimpleModelWithRelease extends SimpleModel {
+class CheckedSimpleModelWithRelease extends CheckedSimpleModel {
     constructor(t, options) {
         super(t, options);
         this.released = false;
     }
 
     release() {
-        if (this.released) throw 'SimpleModelWithRelease.release has been called twice';
+        if (this.released) throw 'CheckedSimpleModelWithRelease.release has been called twice';
         this.released = true;
     }
 
@@ -188,20 +202,63 @@ function testCompressWithModel(input, inputDesc, expectedCompressedSize, modelCl
     });
 }
 
-testCompressWithModel('hello, world!', 'short string', 13, SimpleModel);
-testCompressWithModel('hello, world!', 'short string', 13, SimpleModelWithRelease);
+testCompressWithModel('hello, world!', 'short string', 13, CheckedSimpleModel);
+testCompressWithModel('hello, world!', 'short string', 13, CheckedSimpleModelWithRelease);
 
 // this will result in the maximum probability around 4000th bits
-testCompressWithModel('\xff'.repeat(10000), 'all ones', 1, SimpleModel);
-testCompressWithModel('\0'.repeat(10000), 'all zeroes', 1, SimpleModel);
+testCompressWithModel('\xff'.repeat(10000), 'all ones', 1, CheckedSimpleModel);
+testCompressWithModel('\0'.repeat(10000), 'all zeroes', 1, CheckedSimpleModel);
 
-testCompressWithModel('\x55'.repeat(10000), 'repeating ones & zeroes', 10000, SimpleModel);
+testCompressWithModel('\x55'.repeat(10000), 'repeating ones & zeroes', 10000, CheckedSimpleModel);
 
 // test if the encoder still works at the extreme probability;
 // since there would be 1/2^precision probability ten times,
 // the expected size would be around precision * 10 = 120 bits
 const veryRareZeroes = ('\xff'.repeat(10000) + '\xfe').repeat(10);
-testCompressWithModel(veryRareZeroes, 'very rare zeroes', 15, SimpleModel);
+testCompressWithModel(veryRareZeroes, 'very rare zeroes', 15, CheckedSimpleModel);
+
+test('inputEndsWithByte', t => {
+    const options = {
+        inBits: 8,
+        outBits: 8,
+        precision: 16,
+        contextBits: 10,
+        modelMaxCount: 63,
+    };
+
+    for (const lastByte of [0, 1, 255]) {
+        options.inputEndsWithByte = lastByte;
+
+        for (const input of [
+            [lastByte],
+            [lastByte === 1 ? 0 : 1, lastByte],
+            [lastByte === 255 ? 0 : 255, lastByte],
+            [1, 2, 3, 0].map(i => (lastByte + i) & 255),
+        ]) {
+            const compressed = compressWithModel(input, new DirectContextModel(options), options);
+            t.is(compressed.inputLength, -1);
+            const decompressed = decompressWithModel(compressed, new DirectContextModel(options), options);
+            t.deepEqual(decompressed, input);
+        }
+
+        // make sure that an input with the incorrect last byte or
+        // a stream that is compressed without inputEndsWithByte triggers an error
+        for (const input of [
+            [],
+            [lastByte ^ 1],
+            [lastByte, lastByte],
+            [!lastByte | 0, lastByte, !lastByte | 0, lastByte],
+        ]) {
+            t.throws(() => compressWithModel(input, new DirectContextModel(options), options));
+
+            if (input[input.length - 1] !== lastByte) {
+                const otherOptions = { ...options, inputEndsWithByte: undefined };
+                const compressed = compressWithModel(input, new DirectContextModel(options), otherOptions);
+                t.throws(() => decompressWithModel(compressed, new DirectContextModel(options), options));
+            }
+        }
+    }
+});
 
 //------------------------------------------------------------------------------
 

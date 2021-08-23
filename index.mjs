@@ -448,8 +448,22 @@ export class DefaultModel extends LogisticMixModel {
 //------------------------------------------------------------------------------
 
 export const compressWithModel = (input, model, options) => {
-    const { inBits, outBits, precision, preset = [], calculateByteEntropy } = options;
+    const { inBits, outBits, precision, preset = [], inputEndsWithByte, calculateByteEntropy } = options;
     const encoder = new AnsEncoder(options);
+
+    if (inputEndsWithByte !== undefined) {
+        if (input.length === 0) {
+            throw new Error('compressWithModel: inputEndsWithByte given but input is empty');
+        }
+        if (input[input.length - 1] !== inputEndsWithByte) {
+            throw new Error('compressWithModel: input does not agree with inputEndsWithByte');
+        }
+        for (let offset = 0; offset < input.length - 1; ++offset) {
+            if (input[offset] === inputEndsWithByte) {
+                throw new Error('compressWithModel: input contains multiple inputEndsWithByte');
+            }
+        }
+    }
 
     for (let offset = 0; offset < preset.length; ++offset) {
         const code = preset[offset];
@@ -488,11 +502,12 @@ export const compressWithModel = (input, model, options) => {
     }
 
     const bufLengthInBytes = Math.ceil(buf.length * (outBits < 0 ? Math.log2(-outBits) : outBits) / 8);
-    return { state, buf, inputLength: input.length, bufLengthInBytes, byteEntropy };
+    const inputLength = inputEndsWithByte === undefined ? input.length : -1; // so that the caller can't rely on this
+    return { state, buf, inputLength, bufLengthInBytes, byteEntropy };
 };
 
 export const decompressWithModel = ({ state, buf, inputLength }, model, options) => {
-    const { inBits, preset = [] } = options;
+    const { inBits, preset = [], inputEndsWithByte } = options;
     const decoder = new AnsDecoder({ state, buf }, options);
 
     for (let offset = 0; offset < preset.length; ++offset) {
@@ -505,16 +520,31 @@ export const decompressWithModel = ({ state, buf, inputLength }, model, options)
     }
 
     const reconstructed = [];
-    for (let offset = 0; offset < inputLength; ++offset) {
-        let current = 0;
-        for (let i = inBits - 1; i >= 0; --i) {
-            const prob = model.predict();
-            const actualBit = decoder.readBit(prob);
-            current = (current << 1) | actualBit;
-            model.update(actualBit);
+    if (inputEndsWithByte !== undefined) {
+        let current;
+        do {
+            current = 0;
+            for (let i = inBits - 1; i >= 0; --i) {
+                const prob = model.predict();
+                const actualBit = decoder.readBit(prob);
+                current = (current << 1) | actualBit;
+                model.update(actualBit);
+            }
+            model.flushByte(current, inBits);
+            reconstructed.push(current);
+        } while (current !== inputEndsWithByte);
+    } else {
+        for (let offset = 0; offset < inputLength; ++offset) {
+            let current = 0;
+            for (let i = inBits - 1; i >= 0; --i) {
+                const prob = model.predict();
+                const actualBit = decoder.readBit(prob);
+                current = (current << 1) | actualBit;
+                model.update(actualBit);
+            }
+            model.flushByte(current, inBits);
+            reconstructed.push(current);
         }
-        model.flushByte(current, inBits);
-        reconstructed.push(current);
     }
 
     if (model.release) model.release();
