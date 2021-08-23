@@ -1,7 +1,7 @@
 import test from 'ava';
 import * as crypto from 'crypto';
 import {
-    AnsEncoder, AnsDecoder, DefaultModel, Packer,
+    ArrayBufferPool, AnsEncoder, AnsDecoder, DirectContextModel, DefaultModel, Packer,
     compressWithModel, decompressWithModel
 } from './index.mjs';
 
@@ -194,6 +194,32 @@ testCompressWithModel('\x55'.repeat(10000), 'repeating ones & zeroes', 10000, Si
 // the expected size would be around precision * 10 = 120 bits
 const veryRareZeroes = ('\xff'.repeat(10000) + '\xfe').repeat(10);
 testCompressWithModel(veryRareZeroes, 'very rare zeroes', 15, SimpleModel);
+
+//------------------------------------------------------------------------------
+
+test('DirectContextModel.confirmations', t => {
+    const arrayBufferPool = new ArrayBufferPool();
+    const options = {
+        inBits: 8,
+        outBits: 8,
+        precision: 16,
+        contextBits: 5, // 32 elements
+        modelMaxCount: 63,
+        arrayBufferPool,
+    };
+
+    // the size of 1 will set ~8 elements and test for partial fills.
+    // the size of 10 will set all 32 elements with >92% probability and test for total fills.
+    for (const size of [1, 10]) {
+        // this ensures that we cycle through multiple confirmation resets
+        for (let i = 0; i < 1000; ++i) {
+            const input = [...crypto.randomBytes(size)];
+            const compressed = compressWithModel(input, new DirectContextModel(options), options);
+            const decompressed = decompressWithModel(compressed, new DirectContextModel(options), options);
+            t.deepEqual(decompressed, input);
+        }
+    }
+});
 
 //------------------------------------------------------------------------------
 

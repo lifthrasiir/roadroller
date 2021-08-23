@@ -188,14 +188,39 @@ export class DirectContextModel {
         this.arrayBufferPool = arrayBufferPool;
         this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
         this.counts = newUintArray(arrayBufferPool, this, Math.ceil(Math.log2(modelMaxCount + 1)), 1 << contextBits);
-        this.predictions.fill(1 << (precision - 1));
-        this.counts.fill(0);
+
+        if (arrayBufferPool) {
+            // we need to initialize the array since it may have been already used,
+            // but UintXXArray.fill is comparatively slow, less than 5 GB/s even in fastest browsers.
+            // we instead use more memory to confirm that each bit of context has been initialized.
+            //
+            // the final excess element is the maximum mark in use.
+            // (this kind of size is not used elsewhere, so we can safely reuse that.)
+            // we choose a new mark to mark initialized elements *in this instance*.
+            // if the mark reaches 255 we reset the entire array and start over.
+            // this scheme effectively reduces the number of fill calls by a factor of 510.
+            this.confirmations = newUintArray(arrayBufferPool, this, 8, (1 << contextBits) + 1);
+            this.mark = this.confirmations[1 << contextBits] + 1;
+            if (this.mark === 256) {
+                this.mark = 1;
+                this.confirmations.fill(0);
+            }
+            this.confirmations[1 << contextBits] = this.mark;
+        } else {
+            this.predictions.fill(1 << (precision - 1));
+            //this.counts.fill(0); // we don't really need this
+        }
 
         this.bitContext = 1;
     }
 
     predict(context = 0) {
         context = (context + this.bitContext) & ((1 << this.contextBits) - 1);
+        if (this.confirmations && this.confirmations[context] !== this.mark) {
+            this.confirmations[context] = this.mark;
+            this.predictions[context] = 1 << (this.precision - 1);
+            this.counts[context] = 0;
+        }
         return this.predictions[context];
     }
 
@@ -251,8 +276,10 @@ export class DirectContextModel {
         if (this.arrayBufferPool) {
             if (this.predictions) this.arrayBufferPool.release(this.predictions.buffer);
             if (this.counts) this.arrayBufferPool.release(this.counts.buffer);
+            if (this.confirmations) this.arrayBufferPool.release(this.confirmations.buffer);
             this.predictions = null;
             this.counts = null;
+            this.confirmations = null;
         }
     }
 }
