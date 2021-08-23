@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.2.1 (2021-08-24)
+
+Compression improvements:
+
+- The context model is now up to 3 times faster than before. This massively improves the optimization performance especially in Firefox. (8af149c105a1eae8f2f29952bffa65670fe76880)
+
+UI/API improvements:
+
+- Now can be used (not exactly "supported", though) with Node.js 14. (d9270c6039f62c994c3444adb84cebed9825fe42)
+- The internal API now supports several tools that are necessary to use Roadroller as a general purpose compression library:
+    - The preset dictionary can be used now. (3bf784595ae593534f305f80ba00d7763c41e76d)
+    - The number of output codes no longer has to be a power of 2; the negative number to `outBits` now denotes the exact code count. (ecb84a358322931dd341aa926a50ee74b59dcf9f)
+    - The decompressor can be configured so that it ends at the known final byte instead of the known input length. (d8146d9894ad180123e8d3a3c53e6f3f3071447b)
+
+Bugfixes:
+
+- Fixed the broken JS parser in the online demo. (2bca32cc9c460052ec728494368842323763a526)
+- While very unlikely to affect anyone, all uses of Math.log2 have been replaced with the exact function. (b29d3652335a97fd80d581002e1fe3289a5538bf)
+
 ## v1.2.0 (2021-08-23)
 
 Compression improvements:
