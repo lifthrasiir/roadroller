@@ -1,6 +1,6 @@
 # Roadroller: Flattens Your JavaScript Demo
 
-**Roadroller** is a heavyweight JavaScript packer designed for large [demos][demo] of at least 10 KB in size, like [js13kGames]. Depending on the input it can provide up to 10% additional compression compared to [Zopfli]. **[Try it online][online]!**
+**Roadroller** is a heavyweight JavaScript packer designed for large [demos][demo] of at least 10 KB in size, like [js13kGames]. Depending on the input it can provide up to 15% additional compression compared to [Zopfli]. **[Try it online][online]!**
 
 Roadroller is considered "heavyweight" unlike typical JS packers such as [JSCrush] or [RegPack], because it is quite resource intensive and requires both a considerable amount of memory and a non-negligible run time. The default should work for most devices, but you can configure both aspects as you need.
 
