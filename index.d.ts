@@ -41,6 +41,7 @@ export interface DirectContextModelOptions {
     contextBits: number;
     precision: number;
     modelMaxCount: number;
+    modelRecipBaseCount?: number;
     arrayBufferPool?: ArrayBufferPool;
 }
 

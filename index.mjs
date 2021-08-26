@@ -206,11 +206,12 @@ export class AnsDecoder {
 //------------------------------------------------------------------------------
 
 export class DirectContextModel {
-    constructor({ inBits, contextBits, precision, modelMaxCount, arrayBufferPool }) {
+    constructor({ inBits, contextBits, precision, modelMaxCount, modelRecipBaseCount, arrayBufferPool }) {
         this.inBits = inBits;
         this.contextBits = contextBits;
         this.precision = precision;
         this.modelMaxCount = modelMaxCount;
+        this.modelBaseCount = 1 / (modelRecipBaseCount || 2);
 
         this.arrayBufferPool = arrayBufferPool;
         this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
@@ -262,9 +263,8 @@ export class DirectContextModel {
             ++this.counts[context];
         }
 
-        // adjust P = predictions[context] by (actual - P) / (counts[context] + 0.5).
-        // when delta = (actual - P) * 2, this adjustment equals to delta / (2 * counts[context] + 1).
-        // in the compact decoder (2 * counts[context] + 1) is directly stored in the typed array.
+        // adjust P = predictions[context] by (actual - P) / (counts[context] + 1 / modelRecipBaseCount).
+        // modelRecipBaseCount should be <= M such that 1 / modelRecipBaseCount isn't cancelled out.
         //
         // claim:
         // 1. the entire calculation always stays in the 32-bit signed integer.
@@ -274,23 +274,25 @@ export class DirectContextModel {
         // assume that 0 <= P < 2^precision and P is an integer.
         // counts[context] is already updated so counts[context] >= 1.
         //
-        // if delta > 0, delta = (2^precision - P) * 2^(30-precision) < 2^30.
-        // then P' = P + trunc(delta / (2 * counts[context] + 1)) / 2^(29-precision)
-        //        <= P + delta / 3 / 2^(29-precision)
-        //         = P + (2^precision - P) * 2^(30-precision) / 2^(29-precision) / 3
-        //         = 2/3 2^precision + 1/3 P
-        //        <= 2/3 2^precision + 1/3 (2^precision - 1)
-        //         = 2^precision - 1/3.
+        // if delta > 0, delta = (2^precision - P) * 2^(29-precision) < 2^29.
+        // then P' = P + trunc(delta / (counts[context] + 1 / modelRecipBaseCount)) / 2^(29-precision)
+        //        <= P + delta / (1 + 1/M) / 2^(29-precision)
+        //         = P + (2^precision - P) * 2^(29-precision) / 2^(29-precision) / (1 + 1/M)
+        //         = P (1 + 1/M) / (1 + 1/M) + 2^precision / (1 + 1/M) - P / (1 + 1/M)
+        //         = (2^precision - P/M) / (1 + 1/M)
+        //         < 2^precision - P/M
+        //        <= 2^precision.
         // therefore P' < 2^precision.
         //
-        // if delta < 0, delta = -P * 2^(30-precision) > -2^30.
-        // then P' = P + trunc(delta / (2 * counts[context] + 1)) / 2^(29-precision)
-        //        >= P + delta / 3 / 2^(29-precision)
-        //         = P - 2/3 P
-        //         > 0.
+        // if delta < 0, delta = -P * 2^(29-precision) > -2^29.
+        // then P' = P + trunc(delta / (counts[context] + 1 / modelRecipBaseCount)) / 2^(29-precision)
+        //        >= P + delta / (1 + 1/1) / 2^(29-precision)
+        //         = P + (-P) / 2
+        //         = P/2
+        //        >= 0.
         // therefore P' >= 0.
-        const delta = ((actualBit << this.precision) - this.predictions[context]) << (30 - this.precision);
-        this.predictions[context] += (delta / (2 * this.counts[context] + 1) | 0) >> (29 - this.precision);
+        const delta = ((actualBit << this.precision) - this.predictions[context]) << (29 - this.precision);
+        this.predictions[context] += (delta / (this.counts[context] + this.modelBaseCount) | 0) >> (29 - this.precision);
 
         this.bitContext = (this.bitContext << 1) | actualBit;
     }
