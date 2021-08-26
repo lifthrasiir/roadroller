@@ -172,6 +172,7 @@ export interface PackerOptions {
     contextBits?: number;
     precision?: number;
     modelMaxCount?: number;
+    modelRecipBaseCount?: number;
     arrayBufferPool?: ArrayBufferPool;
     recipLearningRate?: number;
     /** @deprecated use {@link PackerOptions.recipLearningRate} */
@@ -185,6 +186,7 @@ export interface OptimizedPackerOptions {
     sparseSelectors: number[];
     precision?: number;
     modelMaxCount?: number;
+    modelRecipBaseCount?: number;
     recipLearningRate?: number;
     numAbbreviations?: number;
     preferTextOverJS?: boolean;

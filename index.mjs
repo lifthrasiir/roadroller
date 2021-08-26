@@ -656,6 +656,7 @@ export class Packer {
             maxMemoryMB: options.maxMemoryMB || 150,
             precision: options.precision || 16,
             modelMaxCount: options.modelMaxCount || 5,
+            modelRecipBaseCount: options.modelRecipBaseCount || 20,
             recipLearningRate:
                 options.recipLearningRate ||
                 Math.max(1, Math.round((options.learningRateDenom || 500) / (options.learningRateNum || 1))),
@@ -915,7 +916,7 @@ export class Packer {
         // TODO again, this should be controlled dynamically
         const modelQuotes = preparedJs.code.length > 0;
 
-        const { sparseSelectors, precision, modelMaxCount, recipLearningRate } = options;
+        const { sparseSelectors, precision, modelMaxCount, modelRecipBaseCount, recipLearningRate } = options;
         const contextBits = options.contextBits || contextBitsFromMaxMemory(options);
 
         const compressOptions = { ...options, inBits, outBits, modelQuotes, contextBits };
@@ -936,6 +937,9 @@ export class Packer {
         }
         const singleDigitSelectors = sparseSelectors.every(sel => sel < 512);
         const quotes = [...model.quotesSeen].sort((a, b) => a - b);
+
+        // 2+ decimal points doesn't seem to make any difference after DEFLATE
+        const modelBaseCount = { 1: '1', 2: '.5', 5: '.2', 10: '.1' }[modelRecipBaseCount] || `1/${modelRecipBaseCount}`;
 
         const stringifiedInput = utf8 =>
             // if the input length crosses the threshold,
@@ -1004,12 +1008,12 @@ export class Packer {
             // t: rANS state
             // w: weights
             // p: predictions
-            // c: counts * 2 + 1
+            // c: counts
             `t=${state};` +
             `M=1<<${precision + 1};` +
             `w=${JSON.stringify(Array(numModels).fill(0))};` +
             `p=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(${pow2(precision - 1)});` +
-            `c=new Uint${countBits}Array(${numModels}<<${contextBits}).fill(1);` +
+            `c=new Uint${countBits}Array(${numModels}<<${contextBits});` +
 
             // o: decoded data
             // r: read position in A
@@ -1051,11 +1055,11 @@ export class Packer {
                 // C: context hash
                 // i: model index (unique in the entire code)
                 `u.map((C,i)=>(` +
-                    // update the bitwise context (we haven't updated a yet, so this is fine)
+                    // update the bitwise context.
                     // y is not used but used here to exploit a repeated code fragment
                     `y=p[C]+=` +
-                        `(e*${pow2(precision)}-p[C]<<${30 - precision})/` +
-                            `(c[C]+=2*(c[C]<${2 * modelMaxCount}))` +
+                        `(e*${pow2(precision)}-p[C]<<${29 - precision})/` +
+                            `((c[C]+=c[C]<${modelMaxCount})+${modelBaseCount})` +
                         // this corresponds to delta in the DirectContextModel.update method;
                         // we've already verified delta is within +/-2^31, so `>>>` is not required
                         `>>${29 - precision},` +
@@ -1306,6 +1310,11 @@ export class Packer {
             // make sure that everything in the final range has been evaluated
             for (let x = lo + 1; x < hi; ++x) await evaluate(x);
         };
+
+        // optimize modelRecipBaseCount
+        await search(1, 1000, EXP, async (i, ratio) => {
+            return await updateBestAndReportProgress({ ...best, modelRecipBaseCount: i }, 'modelRecipBaseCount', ratio);
+        });
 
         // optimize modelMaxCount
         await search(1, 32767, EXP, async (i, ratio) => {
