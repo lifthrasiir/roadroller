@@ -44,7 +44,7 @@ Output options:
 -O|--optimize EFFORTS [Default: 0]
   Tries to tune parameters for this input.
     0               Use the baseline parameters.
-    1               Tries to optimize -S, -Zab, -Zco, -Zlr, -Zmc
+    1               Tries to optimize -S and most -Z arguments
                     with a fixed number of attempts (about 300).
                     Also tries to replace -t js with -t text if better.
   Anything beyond -O0 prints the best parameters unless -q is given.
@@ -75,6 +75,11 @@ Output options:
   but become slower each subsequent occurrence of the context.
   This option configures how slowest the adaptation can be;
   smaller COUNT is better for quickly varying (non-stationary) inputs.
+-Zmd|--model-base-divisor COUNT [Range: 1..2^53-1, Default: 20]
+  Configures the reciprocal of initial count when a context is first seen.
+  The count is increased by 1 per occurrence and larger count decreases
+  the speed of adaptation, so if this option is larger the initial count
+  is made smaller and the model would behave much quicker initially.
 -Zpr|--precision BITS [Range: 1..21, Default: 16]
   Sets the precision of internal fixed point representations.
 ` : '') + `
@@ -228,6 +233,12 @@ async function parseArgs(args) {
             if (options.modelMaxCount < 1 || options.modelMaxCount > 32767) {
                 throw 'invalid --model-max-count argument';
             }
+        } else if (m = matchOptArg('model-base-divisor', 'Zmd')) {
+            if (options.modelRecipBaseCount !== undefined) throw 'duplicate --model-base-divisor arguments';
+            options.modelRecipBaseCount = parseInt(getArg(m), 10);
+            if (options.modelRecipBaseCount < 1 || options.modelRecipBaseCount >= 2**53) {
+                throw 'invalid --model-base-divisor argument';
+            }
         } else if (m = matchOptArg('precision', 'Zpr')) {
             if (options.precision !== undefined) throw 'duplicate --precision arguments';
             options.precision = parseInt(getArg(m), 10);
@@ -292,6 +303,9 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
             }
             if (typeof combined.precision === 'number') {
                 args = `-Zpr${combined.precision} ${args}`;
+            }
+            if (typeof combined.modelRecipBaseCount === 'number') {
+                args = `-Zmd${combined.modelRecipBaseCount} ${args}`;
             }
             if (typeof combined.modelMaxCount === 'number') {
                 args = `-Zmc${combined.modelMaxCount} ${args}`;
