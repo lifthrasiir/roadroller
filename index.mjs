@@ -1167,7 +1167,7 @@ export class Packer {
         }
 
         // C and i are bounded so they are not on this list
-        const freeVars = ['A', 'a', 'c', 'e', 'l', 'm', 'o', 'p', 'r', 't', 'u', 'w', 'x', 'y'];
+        const freeVars = ['A', 'M', 'a', 'c', 'e', 'l', 'm', 'o', 'p', 'r', 't', 'u', 'w', 'x', 'y'];
         if (quotes.length > 0) freeVars.push('f');
         freeVars.sort();
 
