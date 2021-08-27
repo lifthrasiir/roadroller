@@ -26,7 +26,7 @@ const inputs = [
 ];
 
 const options = {
-    maxMemoryMB: 150,
+    // see the Usage for available options.
 };
 
 const packer = new Packer(inputs, options);
@@ -105,17 +105,23 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 **Number of contexts** (CLI `-S|--selectors xCOUNT`) relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
 
+**Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used for decompression. Increasing or decreasing memory usage mostly affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture; `-v` will print the actual memory usage to stderr. The default is 150 MB and a larger value is not recommended for various reasons:
+
+* Any further gain for larger memory use is negligible for typical inputs less than 100 KB.
+
+* The compression may use more memory than the decompression: an one-shot compression may use up to 50% more memory, the optimizer will use 50% more on top of that.
+
+* It does take time to allocate and initialize a larger memory (~500 ms), so it is not a good choice for small inputs.
+
+**Allowing the decoder to pollute the global scope** (CLI `-D|--dirty`, API `allowFreeVars` in the options object) is unsafe especially when the Roadroller output should coexist with other code or there are elements with single letter `id` attributes and turned off by default. But if you can control your environment (typical for demos), you can turn this on for a smaller decoder.
+
 **Optimize contexts** (CLI `-O|--optimize 1`, API `Packer.optimize`) searches for better modelling parameters. If parameters are already given the optimizer will try to improve upon that. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 
 * The additional argument in the CLI indicates the level of efforts, which can be 0 (do nothing) or 1 (use the default setting, takes about a minute); other values are reserved for the future expansion. The resulting parameters are printed at the end which can be reused for faster iteration.
 
 * While not strictly required, `Packer.optimize` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
 
-**Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture; `-v` will print the actual memory usage to stderr. The default is 150 MB.
-
 ### Advanced Configuration
-
-<!--**Output variable name** (CLI `--output-var VAR`) sets the variable name for output values. If the name is empty, it is determined from the input code and typically named `_`. You don't need to change this unless you are doing a weird thing and the code can refer to variables that do not appear in verbatim.-->
 
 **Chosen contexts** (CLI `-S|--selectors SELECTOR,SELECTOR,...`, API `sparseSelectors` in the options object) determine which byte contexts are used for each model. <i>K</i>th bit of the number (where K > 0) is set if the context contains the <i>K</i>th-to-last byte: 5 = 101<sub>(2)</sub> for example would correspond to the context of the last byte and third-to-last byte, also called a sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
 
@@ -124,6 +130,8 @@ Each input can be further configured by input type and action. In the CLI you pu
 **Learning rate** (CLI `-Zlr|--learning-rate RATE`, API `recipLearningRate` in the options object) adjusts how fast would the context mixer adapt, where smaller is faster. The default is 500 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try smaller numbers.
 
 **Model max count** (CLI `-Zmc|--model-max-count COUNT`, API `modelMaxCount` in the options object) adjusts how fast would individual contexts adapt, where smaller is faster. The model adapts fastest when a particular context is first seen, but that process becomes slower as the context is seen multiple times. This parameter limits how slowest the adaptation process can be. The default of 5 is specifically tuned for JS code inputs.
+
+**Model base divisor** (CLI `-Zmd|--model-base-divisor DIVISOR`, API `modelRecipBaseCount` in the options object) adjusts how fast should individual contexts adapt *initially*, where larger is faster. The optimal value typically ranges from 10 to 100 for JS code inputs.
 
 **Number of abbreviations** (CLI `-Zab|--num-abbreviations NUM`, API `numAbbreviations` in the options object) affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
 
