@@ -952,9 +952,27 @@ export class Packer {
         // 2+ decimal points doesn't seem to make any difference after DEFLATE
         const modelBaseCount = { 1: '1', 2: '.5', 5: '.2', 10: '.1' }[modelRecipBaseCount] || `1/${modelRecipBaseCount}`;
 
-        // \0 is technically allowed by JS but can't appear in <script>
-        const escapeCharInTemplate = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', '`': '\\`' })[c] || c;
-        const escapeCharInCharClass = c => ({ '\0': '\\0', '\r': '\\r', '\n': '\\n', '\\': '\\\\', ']': '\\]' })[c] || c;
+        // JS allows \0 but <script> replace it with U+FFFE,
+        // so we are fine to use it with eval but not outside.
+        const charEscapesInTemplate = {
+            // <script> replaces \0 with U+FFFE, so it has to be escaped.
+            // but JS itself allows \0 so we don't need additional escapes for eval.
+            '\0': '\\0',
+            // any \r in template literals is replaced with \n.
+            '\r': options.allowFreeVars ? '\\r' : '\\\\r',
+            '\\': options.allowFreeVars ? '\\\\' : '\\\\\\\\',
+            '`': options.allowFreeVars ? '\\`' : '\\\\`',
+        };
+        const charEscapesInCharClass = {
+            '\0': '\\0',
+            '"': options.allowFreeVars ? '"' : '\\"',
+            '\r': options.allowFreeVars ? '\\r' : '\\\\r',
+            '\n': options.allowFreeVars ? '\\n' : '\\\\n',
+            '\\': options.allowFreeVars ? '\\\\' : '\\\\\\\\',
+            ']': options.allowFreeVars ? '\\]' : '\\\\]',
+        };
+        const escapeCharInTemplate = c => charEscapesInTemplate[c] || c;
+        const escapeCharInCharClass = c => charEscapesInCharClass[c] || c;
 
         const makeCharClass = (set, toggle) => {
             const ranges = [];

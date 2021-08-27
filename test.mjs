@@ -337,12 +337,15 @@ test('prepareJs without abbrs', t => {
 
 //------------------------------------------------------------------------------
 
-function packAndEval(data, options = {}) {
+function pack(data, options = {}) {
     const type = options.type || 'js';
     const action = options.action || 'eval';
     const packer = new Packer([{ type, action, data }], { maxMemoryMB: 10, ...options });
-    const { firstLine, secondLine, freeVars } = packer.makeDecoder();
+    return packer.makeDecoder();
+}
 
+function packAndEval(data, options = {}) {
+    const { firstLine, secondLine, freeVars } = pack(data, options);
     // Roadroller outputs use `with`, so we need to break the strictness inheritance with Function
     return Function('code', 'return eval(code)')(
         `var unused${freeVars.map(v => ',' + v).join('')};${firstLine}${secondLine}`);
@@ -355,6 +358,12 @@ function packAndReturn(data, options = {}) {
 test('Packer', t => {
     t.is(packAndEval('3 + 4 * 5'), 23);
     t.is(packAndReturn('3 + 4 * 5'), '3+4*5');
+
+    // allowFreeVars
+    const cleanlyPacked = pack('3 + 4 * 5', { allowFreeVars: true });
+    t.deepEqual(cleanlyPacked.freeVars, []);
+    t.is(packAndEval('3 + 4 * 5', { allowFreeVars: true }), 23);
+    t.is(packAndReturn('3 + 4 * 5', { allowFreeVars: true }), '3+4*5');
 });
 
 test('abbreviations', t => {
