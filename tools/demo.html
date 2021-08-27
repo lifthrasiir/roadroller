@@ -168,7 +168,7 @@ input[type=number] { width: 5em; }
 <p id=num-contexts><strong>Number of contexts</strong> relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
 <p id=max-memory><strong>Maximum memory usage</strong> configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
 <p id=dirty><strong>Allowing the decoder to pollute the global scope</strong> is unsafe especially when the Roadroller output should coexist with other code or there are elements with single letter <code>id</code> attributes and turned off by default. But if you can control your environment (typical for demos), you can turn this on for a smaller decoder.
-<p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
+<p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. At the first click it runs a quick search that takes 10 seconds for typical 30 KB input, and subsequent click will run a full search. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 
 <h3>Advanced Configuration</h3>
 <!--<p id=uncompressed-only><strong>Optimize for uncompressed size</strong> assumes the absence of the outer comperssion algorithm like DEFLATE. This is <em>bad</em> for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
@@ -332,8 +332,11 @@ let initialRefresh = true;
 let output = null;
 let refreshTicks = 0; // used to halt the computation when it becomes outdated
 let optimizing = false;
+let lastOptimizationLevel = 0;
 
 const refreshOutput = () => {
+    $optimize.textContent = 'Optimize parameters';
+    lastOptimizationLevel = 0;
     if (!optimizing) compress(false);
 };
 
@@ -416,8 +419,10 @@ const compress = async optimize => {
         $usedmemory.textContent = packer.memoryUsageMB;
 
         if (optimize) {
+            if (lastOptimizationLevel < 2) ++lastOptimizationLevel;
+
             let tick = 0;
-            const result = await packer.optimize(async info => {
+            const result = await packer.optimize(lastOptimizationLevel, async info => {
                 const clock = 0x1f550 + tick++ % 12;
                 const pass = info.pass + (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '');
                 updateOutput(`${String.fromCodePoint(clock)} optimizing ${pass}: `, origLength, info.bestSize);
@@ -440,6 +445,7 @@ const compress = async optimize => {
                     if (input.i$type.value === 'js') input.i$type.value = 'text';
                 }
             }
+            $optimize.textContent = 'Optimize parameters (harder)';
         }
 
         $selectors.value = sparseSelectors.join(',');

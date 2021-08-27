@@ -206,6 +206,10 @@ export class Packer {
     optimize(
         progress?: (info: OptimizerProgressInfo<OptimizedPackerOptions>) => undefined | boolean | Promise<undefined | boolean>,
     ): Promise<OptimizerResult<OptimizedPackerOptions>>;
+    optimize(
+        level: number,
+        progress?: (info: OptimizerProgressInfo<OptimizedPackerOptions>) => undefined | boolean | Promise<undefined | boolean>,
+    ): Promise<OptimizerResult<OptimizedPackerOptions>>;
 }
 
 export interface Packed {

@@ -1289,7 +1289,13 @@ export class Packer {
         return result;
     }
 
-    async optimize(progress) {
+    async optimize(level, progress) {
+        if (typeof level === 'function') {
+            progress = level;
+            level = 0;
+        }
+        level = level || 1;
+
         const performance = await getPerformanceObject();
         const copy = v => JSON.parse(JSON.stringify(v));
 
@@ -1348,7 +1354,14 @@ export class Packer {
         // the way to pick three points depends on the distribution and affects the search performance.
         const EXP = 1;
         const LINEAR = 0;
-        const search = async (lo, hi, dist, score) => {
+        const search = async (lo, hi, dist, manualValues, score) => {
+            if (level <= 1) {
+                for (let i = 0; i < manualValues.length; ++i) {
+                    await score(manualValues[i], i / manualValues.length);
+                }
+                return;
+            }
+
             // this midpoint function should satisfy x < mid(x, y) < y when x + 2 <= y.
             // the linear case is obvious: trunc((x + y) / 2) = x + trunc((y - x) / 2) > x and < y.
             // for the exponential case, it's equivalent to
@@ -1402,18 +1415,18 @@ export class Packer {
         };
 
         // optimize modelRecipBaseCount
-        await search(1, 1000, EXP, async (i, ratio) => {
+        await search(1, 1000, EXP, [10, 20, 50, 100], async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, modelRecipBaseCount: i }, 'modelRecipBaseCount', ratio);
         });
 
         // optimize modelMaxCount
-        await search(1, 32767, EXP, async (i, ratio) => {
+        await search(1, 32767, EXP, [4, 5, 6], async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, modelMaxCount: i }, 'modelMaxCount', ratio);
         });
         if (best.modelMaxCount === this.options.modelMaxCount) delete best.modelMaxCount;
 
         // optimize numAbbreviations
-        await search(0, maxAbbreviations, LINEAR, async (i, ratio) => {
+        await search(0, maxAbbreviations, LINEAR, [0, 16, 32, 64], async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, numAbbreviations: i }, 'numAbbreviations', ratio);
         });
         if (best.numAbbreviations === this.options.numAbbreviations) delete best.numAbbreviations;
@@ -1426,7 +1439,7 @@ export class Packer {
         let currentSize = bestSize;
         const taboo = new Map();
         let temperature = 1;
-        const targetTemperature = 0.1;
+        const targetTemperature = level >= 2 ? 0.1 : 0.9;
         while (temperature > targetTemperature) {
             const next = current.slice();
 
@@ -1453,13 +1466,13 @@ export class Packer {
         }
 
         // optimize precision
-        await search(1, 21, LINEAR, async (i, ratio) => {
+        await search(1, 21, LINEAR, [12, 14, 16], async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, precision: i }, 'precision', ratio);
         });
         if (best.precision === this.options.precision) delete best.precision;
 
         // optimize recipLearningRate
-        await search(1, 99999, EXP, async (i, ratio) => {
+        await search(1, 99999, EXP, [500, 750, 1000, 1250, 1500], async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, recipLearningRate: i }, 'recipLearningRate', ratio);
         });
         if (best.recipLearningRate === this.options.recipLearningRate) delete best.recipLearningRate;

@@ -43,10 +43,10 @@ Output options:
   The output path. Can be "-" for stdout.
 -O|--optimize EFFORTS [Default: 0]
   Tries to tune parameters for this input.
-    0               Use the baseline parameters.
-    1               Tries to optimize -S and most -Z arguments
-                    with a fixed number of attempts (about 300).
-                    Also tries to replace -t js with -t text if better.
+    0   Use the baseline parameters.
+    1   Tries to optimize -S and most -Z arguments with ~30 attempts.
+        Also tries to replace "-t js" with "-t text" if beneficial.
+    2   Same to -O1 but with ~300 attempts.
   Anything beyond -O0 prints the best parameters unless -q is given.
 -M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
   Configures the maximum memory usage.
@@ -243,7 +243,7 @@ async function parseArgs(args) {
     }
     if (optimize === undefined) {
         optimize = 0;
-    } else if (!between(0, optimize, 1)) {
+    } else if (!between(0, optimize, 2)) {
         throw 'invalid --optimize argument';
     }
     if (options.maxMemoryMB !== undefined) {
@@ -342,7 +342,7 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
             return args;
         };
 
-        const result = await packer.optimize(info => {
+        const result = await packer.optimize(optimize, info => {
             if (verbose < 0) return;
             console.warn(
                 `(${info.pass}` +
