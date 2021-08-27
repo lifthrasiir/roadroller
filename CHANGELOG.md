@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.0.0 (2021-08-28)
+
+**Breaking Changes:**
+
+- **The first line and second line are no longer guaranteed to be separate statements.** In particular the documentation accidentally suggested that two lines can be (but are not recommended to be) in separate files, necessitating a breaking change.
+- `DirectContextModelOptions.modelRecipBaseCount` is now required. The value of 2 is identical to the 1.x behavior.
+- Deprecated APIs have been removed.
+    - `OptimizerProgressInfo.temperature`: Use `ratio` instead.
+    - `optimizeSparseSelectors` function and `Packer.optimizeSparseSelectors` method: Use `Packer.optimize` instad.
+    - `PackerOptions.learningRateNum/Denom`: Use `PackerOptions.recipLearningRate` instead.
+
+Compression improvements:
+
+- Added a new tunable `modelRecipBaseCount` parameter (`-Zmd` in the CLI) with a new default, allowing ~3% additional improvements. (4e8041c11457636b6a171e316752af92d4d79614, 207186191cfdb6dfc1251f597b39284ae20dd89c, 717f7eeb294d55c72fb53f5ae31bdbebbf8c59a5)
+- The decoder is now slightly smaller. (9cf184518c93005a386895f381ba1ffc6e1b47e3)
+
+UI/API improvements:
+
+- #14: `-O1` is now a quick search that only takes ~10s for typical inputs. The old `-O1` is renamed to `-O2`. (df5c8edb6a803f47dfb3d29c1dc6d5fcba738322)
+- The CLI now defaults to `-O1` if no optimizable arguments are given. Use `-O0` to explicitly disable the optimization. (a610f680a3d1e5aabed81368af050ac5271b2a55)
+- The estimated compressed size is now more accurate. (8732d3da350b8da58e843921d36fa509fe0737ae)
+- The online demo is now slightly more mobile friendly. (10b0bbe6715e36175421c4cac5360148c30fe942)
+
+Bugfixes:
+
+- #7: The output no longer pollutes the global scope by default. New `allowFreeVars` option (`-D` in the CLI) can be used to allow the decoder to be "dirty". (70fae12ee0eeaf754d46e6db78dacd1097f5c5cb, ecd8116c2c0c305334e18fea99b25d9f72b82d5e)
+- #15: The optimizer now works in Node.js 14. It is still strongly recommended to use Node.js 16 because 14 is significantly slower. (13d9c8d39740790b5bfcc3b07035a41510aba19f)
+- Fixed a bug where `-Zco -M` (but not `-M -Zco`) was incorrectly allowed in the CLI. (ecd8116c2c0c305334e18fea99b25d9f72b82d5e)
+- `Packed.freeVars` was missing one variable. (740f2b5eae65b0c033c5f382f49742393d02118a)
+
 ## v1.2.1 (2021-08-24)
 
 Compression improvements:
