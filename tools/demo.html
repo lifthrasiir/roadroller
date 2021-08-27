@@ -1,5 +1,6 @@
 <!doctype html>
 <meta charset=utf-8>
+<meta name=viewport content=width=device-width,initial-scale=0.8,user-scalable=no>
 <title>Roadroller: Flattens Your JavaScript Demo</title>
 <!-- this placeholder is hidden only when the script completely finishes -->
 <a id=github href=https://github.com/lifthrasiir/roadroller/ style=display:grid;place-content:center;position:fixed;top:0;left:0;bottom:0;right:0;background:#2f2f2f;color:#fff;text-decoration:none>Page not loading? Please take a look at GitHub instead.</a>
@@ -40,7 +41,8 @@ fieldset>header { background: #591902; color: #f2f2f2; padding: 0.2em 0.5em; wid
 fieldset>header>span { flex: 1; }
 fieldset>header input { background: inherit; color: inherit; border: 0; border-bottom: 1px solid white; width: 10em; }
 fieldset>footer { border-top: 1px solid #591902; color: #591902; padding: 0.2em 0.5em; width: 100%; order: 4; }
-fieldset>footer ul { margin: 0; }
+fieldset>footer ul { margin: 0; column-count: 2; }
+@media screen and (max-width: 62em) { fieldset>footer ul { column-count: 1; } }
 fieldset>footer ul.c\$inline { display: flex; flex-wrap: wrap; column-gap: 2em; }
 fieldset>footer li { list-style: none; }
 fieldset>pre { margin: 0; padding: 0.5em; order: 3; white-space: pre-wrap; word-break: break-all; user-select: all; }
@@ -101,17 +103,17 @@ input[type=number] { width: 5em; }
 <pre><span id=$output1></span><span id=$output2></span></pre>
 <aside id=$outputmessage></aside>
 <footer><ul>
+<li><label>Number of contexts: <input id=$numcontexts type=number value=12 min=1 max=64></label> <a href=#num-contexts title=Help>ℹ️</a>
+<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>96</span> MB in use)</label> <a href=#max-memory title=Help>ℹ️</a>
 <li><button id=$reset>Reset parameters</button> <button id=$optimize>Optimize parameters</button> <a href=#optimize title=Help>ℹ️</a>
-<li><label>Number of Contexts: <input id=$numcontexts type=number value=12 min=1 max=64> <a href=#num-contexts title=Help>ℹ️</a>
-<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>96</span> MB in use) <a href=#max-memory title=Help>ℹ️</a>
 </ul><details><summary>Advanced configuration</summary><ul>
 <!--<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>-->
-<li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+)+ value=> <a href=#chosen-contexts title=Help>ℹ️</a>
-<li><label>Precision: <input id=$precision type=number value=16 min=1 max=21> <a href=#precision title=Help>ℹ️</a>
-<li><label>Learning rate: <input id=$learningrate type=number value=500 min=1 max=99999> <a href=#learning-rate title=Help>ℹ️</a>
-<li><label>Model max count: <input id=$modelmaxcount type=number value=5 min=1 max=32767> <a href=#model-max-count title=Help>ℹ️</a>
-<li><label>Number of abbreviations: <input id=$numabbrevs type=number value=64 min=0 max=64> <a href=#num-abbreviations title=Help>ℹ️</a>
-<!--<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size <a href=#uncompressed-only title=Help>ℹ️</a>-->
+<li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+)+ value=></label> <a href=#chosen-contexts title=Help>ℹ️</a>
+<li><label>Precision: <input id=$precision type=number value=16 min=1 max=21></label> <a href=#precision title=Help>ℹ️</a>
+<li><label>Learning rate: <input id=$learningrate type=number value=500 min=1 max=99999></label> <a href=#learning-rate title=Help>ℹ️</a>
+<li><label>Model max count: <input id=$modelmaxcount type=number value=5 min=1 max=32767></label> <a href=#model-max-count title=Help>ℹ️</a>
+<li><label>Number of abbreviations: <input id=$numabbrevs type=number value=64 min=0 max=64></label> <a href=#num-abbreviations title=Help>ℹ️</a>
+<!--<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size</label> <a href=#uncompressed-only title=Help>ℹ️</a>-->
 </ul></details></footer>
 </fieldset>
 
@@ -163,17 +165,18 @@ input[type=number] { width: 5em; }
 
 <h3>Output Configuration</h3>
 <p id=num-contexts><strong>Number of contexts</strong> relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
-<p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 <p id=max-memory><strong>Maximum memory usage</strong> configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
+<p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 
 <h3>Advanced Configuration</h3>
 <!--<p id=output-var><strong>Output variable name</strong> sets the variable name for output values. If the name is empty, it is determined from the input code and typically named <code>_</code>. You don't need to change this unless you are doing a weird thing and the code can refer to variables that do not appear in verbatim.-->
+<!--<p id=uncompressed-only><strong>Optimize for uncompressed size</strong> assumes the absence of the outer comperssion algorithm like DEFLATE. This is <em>bad</em> for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
+<p>Following parameters can be automatically optimized and normally you don't have to touch them unless you want to reproduce a particular set of parameters.
 <p id=chosen-contexts><strong>Chosen contexts</strong> determine which byte contexts are used for each model. <i>K</i>th bit of the number (where K > 0) is set if the context contains the <i>K</i>th-to-last byte: 5 = 101<sub>(2)</sub> for example would correspond to the context of the last byte and third-to-last byte, also called a sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
 <p id=precision><strong>Precision</strong> is the number of fractional bits used in the internal fixed point representation. This is shared between the entropy coder and context models and can't be decoupled. The default of 16 should be enough, you can also try to decrease it.
 <p id=learning-rate><strong>Learning rate</strong> adjusts how fast would the context mixer adapt, where smaller is faster. The default is 500 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try smaller numbers.
 <p id=model-max-count><strong>Model max count</strong> adjusts how fast would individual contexts adapt, where smaller is faster. The model adapts fastest when a particular context is first seen, but that process becomes slower as the context is seen multiple times. This parameter limits how slowest the adaptation process can be. The default of 5 is specifically tuned for JS code inputs.
 <p id=num-abbreviations><strong>Number of abbreviations</strong> affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
-<!--<p id=uncompressed-only><strong>Optimize for uncompressed size</strong> assumes the absence of the outer comperssion algorithm like DEFLATE. This is <em>bad</em> for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
 
 <h2>Command-line Usage and API</h2>
 <p>Roadroller is available as an <a href=https://www.npmjs.com/package/roadroller>NPM package</a>:
