@@ -56,7 +56,7 @@ if (false) { // doesn't improve much
 const { firstLine, secondLine } = packer.makeDecoder();
 
 const uncompressed = minifyHtml(preamble) + '<script>' + combinedJs + '</script>';
-const compressed = minifyHtml(preamble) + '<script>' + firstLine + ';' + secondLine + '</script>';
+const compressed = minifyHtml(preamble) + '<script>' + firstLine + secondLine + '</script>';
 fs.writeFileSync(await resolve('demo-uncompressed.html'), uncompressed, { encoding: 'utf-8' });
 fs.writeFileSync(await resolve('demo-compressed.html'), compressed, { encoding: 'utf-8' });
 
@@ -98,12 +98,14 @@ function stripModule(js, main) {
             ignoreNextDefault = false;
             if (token.value === 'default') continue;
         }
-        if (ignoreTilSemicolon) {
+        if (ignoreTilSemicolon === 'unless-paren' && token.value === '(') {
+            ignoreTilSemicolon = false;
+        } else if (ignoreTilSemicolon) {
             ignoreTilSemicolon = (token.value !== ';');
             continue;
         }
         if (token.value === 'import') {
-            ignoreTilSemicolon = true;
+            ignoreTilSemicolon = 'unless-paren'; // retain `import(...)`
             continue;
         }
         if (token.value === 'export') {
