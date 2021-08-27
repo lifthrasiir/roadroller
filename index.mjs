@@ -941,14 +941,6 @@ export class Packer {
         // 2+ decimal points doesn't seem to make any difference after DEFLATE
         const modelBaseCount = { 1: '1', 2: '.5', 5: '.2', 10: '.1' }[modelRecipBaseCount] || `1/${modelRecipBaseCount}`;
 
-        const stringifiedInput = utf8 =>
-            // if the input length crosses the threshold,
-            // the input is either forced to be encoded in UTF-8
-            // or (in the case of JS inputs) always in ASCII thus can be decoded as UTF-8.
-            utf8 || inputLength >= TEXT_DECODER_THRESHOLD ?
-                `new TextDecoder().decode(new Uint8Array(o))` :
-                `String.fromCharCode(...o)`;
-
         // \0 is technically allowed by JS but can't appear in <script>
         const escapeCharInTemplate = c => ({ '\0': '\\0', '\r': '\\r', '\\': '\\\\', '`': '\\`' })[c] || c;
         const escapeCharInCharClass = c => ({ '\0': '\\0', '\r': '\\r', '\n': '\\n', '\\': '\\\\', ']': '\\]' })[c] || c;
@@ -980,22 +972,32 @@ export class Packer {
             return (toggle ? '' : '^') + ranges.join('');
         };
 
-        const pow2 = n => {
-            if (n < 10 || n > precision + 10) return '' + (1 << n);
-            // make use of M = 2^(precision+1) as much as possible
-            n -= precision + 1;
-            if (n < 0) return `M/${1 << -n}`;
-            if (n > 0) return `M*${1 << n}`;
-            return 'M';
-        };
-
         // the decoder consists of three loops and its code order doesn't match
         // with the execution order, which is denoted with the preceding number.
+        // for the easier manipulation of variables, every variable is named
+        // in green alphabet and only replaced with the actual names at the end.
+
+        const stringifiedInput = utf8 =>
+            // if the input length crosses the threshold,
+            // the input is either forced to be encoded in UTF-8
+            // or (in the case of JS inputs) always in ASCII thus can be decoded as UTF-8.
+            utf8 || inputLength >= TEXT_DECODER_THRESHOLD ?
+                `new TextDecoder().decode(new Uint8Array(ο))` :
+                `String.fromCharCode(...ο)`;
+
+        const pow2 = n => {
+            if (n < 10 || n > precision + 10) return '' + (1 << n);
+            // make use of θ = 2^(precision+1) as much as possible
+            n -= precision + 1;
+            if (n < 0) return `θ/${1 << -n}`;
+            if (n > 0) return `θ*${1 << n}`;
+            return 'θ';
+        };
 
         // 0.
-        // A: rANS output encoded in lowest 6 bits (higher bits are chosen to avoid backslash)
+        // ι: rANS output encoded in lowest 6 bits (higher bits are chosen to avoid backslash)
         // this should be isolated from other code for the best DEFLATE result
-        let firstLine = `A='`;
+        let firstLine = `ι='`;
         const CHUNK_SIZE = 8192;
         for (let i = 0; i < buf.length; i += CHUNK_SIZE) {
             firstLine += String.fromCharCode(...buf.slice(i, i + CHUNK_SIZE).map(c => c === 0x1c || c === 0x3f ? c : c | 0x40));
@@ -1005,125 +1007,127 @@ export class Packer {
         let secondLine =
             // 1. initialize other variables
             //
-            // t: rANS state
-            // w: weights
-            // p: predictions
-            // c: counts
-            `t=${state};` +
-            `M=1<<${precision + 1};` +
-            `w=${JSON.stringify(Array(numModels).fill(0))};` +
-            `p=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(${pow2(precision - 1)});` +
-            `c=new Uint${countBits}Array(${numModels}<<${contextBits});` +
+            // τ: rANS state
+            // ω: weights
+            // π: predictions
+            // κ: counts
+            `τ=${state};` +
+            `θ=1<<${precision + 1};` +
+            `ω=${JSON.stringify(Array(numModels).fill(0))};` +
+            `π=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(${pow2(precision - 1)});` +
+            `κ=new Uint${countBits}Array(${numModels}<<${contextBits});` +
 
-            // o: decoded data
-            // r: read position in A
-            // l: write position in o
-            // f: if in string the quote character code, otherwise 0 (same to state.quote)
+            // ο: decoded data
+            // ρ: read position in ι
+            // λ: write position in ο
+            // χ: if in string the quote character code, otherwise 0 (same to state.quote)
             // we know the exact input length, so we don't have the end of data symbol
-            `for(o=[r=l=${quotes.length > 0 ? 'f=' : ''}0];` +
+            `for(ο=[ρ=λ=${quotes.length > 0 ? 'χ=' : ''}0];` +
 
                 // 2. read until the known length
-                `l<${inputLength};` +
+                `λ<${inputLength};` +
 
                 // 7. code to be executed after reading one byte
                 //
-                // a is now the decode byte plus additional topmost 1 bit, write (and keep) it
-                `o[l++]=a-=${1 << inBits}` +
+                // ν is now the decode byte plus additional topmost 1 bit, write (and keep) it
+                `ο[λ++]=ν-=${1 << inBits}` +
 
             (quotes.length > 0 ?
-                // update f according to a
-                `,f=f?` +
-                    // if we are in a string we either keep f or reset to 0 if f appeared again
-                    `a-f&&f:` +
-                    // otherwise we set f to a if a is one of opening quotes
+                // update χ according to ν
+                `,χ=χ?` +
+                    // if we are in ν string we either keep χ or reset to 0 if χ appeared again
+                    `ν-χ&&χ:` +
+                    // otherwise we set χ to ν if ν is one of opening quotes
                     // (we only process quotes that actually have appeared in the input)
                     (quotes.length > 1 ?
-                        `(${quotes.map(q => `a==${q}`).join('|')})&&a` :
-                        `a==${quotes[0]}&&a`)
+                        `(${quotes.map(q => `ν==${q}`).join('|')})&&ν` :
+                        `ν==${quotes[0]}&&ν`)
             : '') +
 
             `)` +
 
             // 3. bitwise read loop
             //
-            // a: bit context, equal to `0b1xx..xx` where xx..xx is currently read bits
-            // if a got more than inBits bits we are done reading one input character
-            `for(a=1;a<${1 << inBits};` +
+            // ν: bit context, equal to `0b1xx..xx` where xx..xx is currently read bits
+            // if ν got more than inBits bits we are done reading one input character
+            `for(ν=1;ν<${1 << inBits};` +
 
-                // 6. update contexts and weights with e and a (which is now the bit context)
+                // 6. update contexts and weights with β and ν (which is now the bit context)
                 //
-                // C: context hash
-                // i: model index (unique in the entire code)
-                `u.map((C,i)=>(` +
+                // δ: context hash
+                // μ: model index (unique in the entire code)
+                // also makes use of φ and ε below.
+                `φ.map((δ,μ)=>(` +
                     // update the bitwise context.
-                    // y is not used but used here to exploit a repeated code fragment
-                    `y=p[C]+=` +
-                        `(e*${pow2(precision)}-p[C]<<${29 - precision})/` +
-                            `((c[C]+=c[C]<${modelMaxCount})+${modelBaseCount})` +
+                    // α is not used but used here to exploit a repeated code fragment
+                    `α=π[δ]+=` +
+                        `(β*${pow2(precision)}-π[δ]<<${29 - precision})/` +
+                            `((κ[δ]+=κ[δ]<${modelMaxCount})+${modelBaseCount})` +
                         // this corresponds to delta in the DirectContextModel.update method;
                         // we've already verified delta is within +/-2^31, so `>>>` is not required
                         `>>${29 - precision},` +
                     // update the weight
-                    `w[i]+=x[i]*(e-m/M)` +
+                    `ω[μ]+=ε[μ]*(β-Σ/θ)` +
                 `)),` +
-                `a=a*2+e` +
+                `ν=ν*2+β` +
 
             `)` +
 
             // 4. predict and read one bit
             `for(` +
 
-                // m: sum of weighted probabilities
-                // u: an array of context hashes
+                // Σ: sum of weighted probabilities
+                // φ: an array of context hashes
                 (singleDigitSelectors ?
-                    `u='${selectors.map(i => i.join('')).join('0')}'.split(m=0)`
+                    `φ='${selectors.map(i => i.join('')).join('0')}'.split(Σ=0)`
                 :
-                    `m=0,u=${JSON.stringify(selectors)}`
-                ) + `.map((C,i)=>` +
-                    // C: an array of context offsets (1: last byte, 2: second-to-last byte, ...)
-                    // i: model index 
-                    // y: context hash accumulator
+                    `Σ=0,φ=${JSON.stringify(selectors)}`
+                ) + `.map((δ,μ)=>` +
+                    // δ: an array of context offsets (1: last byte, 2: second-to-last byte, ...)
+                    // μ: model index 
+                    // α: context hash accumulator
                     `(` +
-                        `y=0,` +
-                        `${singleDigitSelectors ? `[...C]` : `C`}.map((C,i)=>` +
-                            // C: context offset
+                        `α=0,` +
+                        `${singleDigitSelectors ? `[...δ]` : `δ`}.map((δ,μ)=>` +
+                            // δ: context offset
                             // redundant argument and parentheses exploit a common code fragment
-                            `(y=y*997+(o[l-C]|0)|0)` +
+                            `(α=α*997+(ο[λ-δ]|0)|0)` +
                         `),` +
-                        `${pow2(contextBits)}-1&y*997+a${quotes.length > 0 ? '+!!f*129' : ''}` +
-                    `)*${numModels}+i` +
+                        `${pow2(contextBits)}-1&α*997+ν${quotes.length > 0 ? '+!!χ*129' : ''}` +
+                    `)*${numModels}+μ` +
                 `),` +
 
-                // calculate the mixed prediction m
+                // calculate the mixed prediction Σ
                 //
-                // C: context hash
-                // i: model index 
-                // y: scratch variable
-                `x=u.map((C,i)=>(` +
-                    `y=p[C]*2+1,` +
+                // δ: context hash
+                // μ: model index 
+                // α: scratch variable
+                // ε: stretched probabilities later used by prediction adjustment
+                `ε=φ.map((δ,μ)=>(` +
+                    `α=π[δ]*2+1,` +
                     // stretch(prob), needed for updates
-                    `y=Math.log(y/(M-y)),` +
-                    `m-=w[i]*y,` +
+                    `α=Math.log(α/(θ-α)),` +
+                    `Σ-=ω[μ]*α,` +
                     // premultiply with learning rate
-                    `y/${recipLearningRate}` +
+                    `α/${recipLearningRate}` +
                 `)),` +
 
-                // m: squash(sum of weighted preds) followed by adjustment
-                `m=~-M/(1+Math.exp(m))|1,` +
-                // e: decoded bit
-                `e=t%M<m,` +
-                `t=t%M+(e?m:M-m)*(t>>${precision + 1})-!e*m` +
+                // Σ: squash(sum of weighted preds) followed by adjustment
+                `Σ=~-θ/(1+Math.exp(Σ))|1,` +
+                // β: decoded bit
+                `β=τ%θ<Σ,` +
+                `τ=τ%θ+(β?Σ:θ-Σ)*(τ>>${precision + 1})-!β*Σ` +
             `;` +
 
                 // 5. renormalize (and advance the input offset) if needed
-                `t<${pow2(28 - outBits)}` +
+                `τ<${pow2(28 - outBits)}` +
             `;` +
-                `t=t*${1<<outBits}|A.charCodeAt(r++)&${(1 << outBits) - 1}` +
+                `τ=τ*${1<<outBits}|ι.charCodeAt(ρ++)&${(1 << outBits) - 1}` +
             `);`;
 
         // 9. postprocessing
-        // also should clobber w and c to trigger the GC as soon as possible
-        let outputVar = 'c'; // can be replaced with assignment statements if possible
+        // also should clobber π and κ to trigger the GC as soon as possible
+        let outputVar = 'κ'; // can be replaced with assignment statements if possible
 
         const [input] = inputsByType['text'] || inputsByType['js'];
         switch (input.type) {
@@ -1133,11 +1137,12 @@ export class Packer {
 
             case 'js':
                 if (preparedJs.abbrs.length === 0) {
-                    outputVar = `c=w=${stringifiedInput()}`;
+                    outputVar = `κ=π=${stringifiedInput()}`;
                 } else if (preparedJs.abbrs.length < 3) {
-                    secondLine += `c=w=${stringifiedInput()};`;
+                    secondLine += `κ=π=${stringifiedInput()};`;
                     for (const [, abbr] of preparedJs.abbrs) {
-                        secondLine += `with(c.split(\`${escapeCharInTemplate(abbr)}\`))c=join(shift());`;
+                        secondLine += `with(κ.split(\`${escapeCharInTemplate(abbr)}\`))` +
+                            `κ=join(shift());`;
                     }
                 } else {
                     // character class is probably uncompressible so the shorter one is preferred
@@ -1145,7 +1150,10 @@ export class Packer {
                     const abbrCharClass1 = makeCharClass(abbrCharSet, true);
                     const abbrCharClass2 = makeCharClass(abbrCharSet, false);
                     const abbrCharClass = (abbrCharClass2.length < abbrCharClass1.length ? abbrCharClass2 : abbrCharClass1);
-                    secondLine += `for(c=${stringifiedInput()};w=/[${abbrCharClass}]/.exec(c);)with(c.split(w))c=join(shift());`;
+                    secondLine +=
+                        `for(κ=${stringifiedInput()};π=/[${abbrCharClass}]/.exec(κ);)` +
+                            `with(κ.split(π))` +
+                                `κ=join(shift());`;
                 }
                 break;
         }
@@ -1166,10 +1174,21 @@ export class Packer {
                 break;
         }
 
-        // C and i are bounded so they are not on this list
-        const freeVars = ['A', 'M', 'a', 'c', 'e', 'l', 'm', 'o', 'p', 'r', 't', 'u', 'w', 'x', 'y'];
-        if (quotes.length > 0) freeVars.push('f');
-        freeVars.sort();
+        const idMap = {
+            'Σ': 'm', 'α': 'y', 'β': 'e', 'δ': 'C', 'ε': 'x',
+            'θ': 'M', 'ι': 'A', 'κ': 'c', 'λ': 'l', 'μ': 'i',
+            'ν': 'a', 'ο': 'o', 'π': 'p', 'ρ': 'r', 'τ': 't',
+            'φ': 'u', 'ω': 'w',
+        };
+        if (quotes.length > 0) {
+            idMap['χ'] = 'f';
+        }
+
+        firstLine = firstLine.replace(/[^\0-\x7f]/g, v => idMap[v]);
+        secondLine = secondLine.replace(/[^\0-\x7f]/g, v => idMap[v]);
+
+        const boundVars = ['δ', 'μ']; // always local to .map()
+        const freeVars = Object.keys(idMap).filter(v => !boundVars.includes(v)).map(v => idMap[v]).sort();
 
         return {
             firstLine,
