@@ -216,7 +216,7 @@ export class DirectContextModel {
         this.contextBits = contextBits;
         this.precision = precision;
         this.modelMaxCount = modelMaxCount;
-        this.modelBaseCount = 1 / (modelRecipBaseCount || 2);
+        this.modelBaseCount = 1 / modelRecipBaseCount;
 
         this.arrayBufferPool = arrayBufferPool;
         this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
@@ -566,7 +566,7 @@ const AUTO_SELECTOR_LIMIT = 512;
 export const defaultSparseSelectors = (numContexts = 12) => {
     numContexts = Math.max(0, Math.min(64, numContexts));
 
-    // this was determined from running optimizeSparseSelectors([]) against samples,
+    // this was determined from running a simple search against samples,
     // where selectors are limited to 0..63 for more thorough search.
     // these were most frequent sparse orders and should be a good baseline.
     const selectors = [0, 1, 2, 3, 6, 7, 13, 21, 25, 42, 50, 57].slice(0, numContexts);
@@ -578,68 +578,6 @@ export const defaultSparseSelectors = (numContexts = 12) => {
     }
 
     return selectors.sort((a, b) => a - b);
-};
-
-export const optimizeSparseSelectors = async (selectors, calculateSize, progress) => {
-    const performance = await getPerformanceObject();
-
-    let current = selectors.slice();
-    let currentSize = calculateSize(selectors);
-    let best = selectors.slice();
-    let bestSize = currentSize;
-
-    if (progress) {
-        const info = {
-            pass: 'sparseSelectors',
-            passRatio: 0,
-            temperature: Infinity,
-            current, currentSize, currentRejected: false,
-            best, bestSize, bestUpdated: true,
-        };
-        if (await progress(info) === false) throw new Error('search aborted');
-    }
-
-    // simulated annealing
-    const searchStart = performance.now();
-    let temperature = 1;
-    while (temperature > 0.1) {
-        const last = current.slice();
-
-        let added;
-        do {
-            added = Math.random() * AUTO_SELECTOR_LIMIT | 0;
-        } while (current.includes(added));
-        current[Math.random() * current.length | 0] = added;
-        current.sort((a, b) => a - b);
-
-        const size = calculateSize(current);
-        let bestUpdated = false;
-        if (size < bestSize) {
-            best = current.slice();
-            bestSize = size;
-            bestUpdated = true;
-        }
-
-        // if size > currentSize then accept by some probability exp(delta / kT) < 1
-        const rejected = Math.exp((currentSize - size) / (6 * temperature)) < Math.random();
-        if (progress) {
-            const info = {
-                pass: 'sparseSelectors', passRatio: Math.log(temperature) / Math.log(0.1), temperature,
-                current, currentSize: size, currentRejected: rejected,
-                best, bestSize, bestUpdated,
-            };
-            if (await progress(info) === false) throw new Error('search aborted');
-        }
-        if (rejected) {
-            current = last;
-        } else {
-            currentSize = size;
-        }
-
-        temperature *= 0.99;
-    }
-
-    return { elapsedMsecs: performance.now() - searchStart, best, bestSize }
 };
 
 //------------------------------------------------------------------------------
@@ -664,9 +602,7 @@ export class Packer {
             precision: options.precision || 16,
             modelMaxCount: options.modelMaxCount || 5,
             modelRecipBaseCount: options.modelRecipBaseCount || 20,
-            recipLearningRate:
-                options.recipLearningRate ||
-                Math.max(1, Math.round((options.learningRateDenom || 500) / (options.learningRateNum || 1))),
+            recipLearningRate: options.recipLearningRate || Math.max(1, 500),
             contextBits: options.contextBits,
             arrayBufferPool: options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
@@ -1280,15 +1216,6 @@ export class Packer {
         return new Packed(result);
     }
 
-    async optimizeSparseSelectors(progress) {
-        const result = await optimizeSparseSelectors(this.options.sparseSelectors, sparseSelectors => {
-            const result = Packer.pack(this.inputsByType, { ...this.options, sparseSelectors });
-            return new Packed(result).estimateLength();
-        }, progress);
-        this.options.sparseSelectors = result.best;
-        return result;
-    }
-
     async optimize(level, progress) {
         if (typeof level === 'function') {
             progress = level;
@@ -1318,7 +1245,7 @@ export class Packer {
             if (!progress) return;
 
             const info = {
-                pass, passRatio, temperature: Infinity,
+                pass, passRatio,
                 current, currentSize, currentRejected,
                 best, bestSize, bestUpdated,
             };

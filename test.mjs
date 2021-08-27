@@ -300,6 +300,7 @@ test('compress with DefaultModel', t => {
         contextBits: 12,
         precision: 16,
         modelMaxCount: 63,
+        modelRecipBaseCount: 20,
         recipLearningRate: 256,
         modelQuotes: true,
     };

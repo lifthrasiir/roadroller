@@ -41,7 +41,7 @@ export interface DirectContextModelOptions {
     contextBits: number;
     precision: number;
     modelMaxCount: number;
-    modelRecipBaseCount?: number;
+    modelRecipBaseCount: number;
     arrayBufferPool?: ArrayBufferPool;
 }
 
@@ -117,8 +117,6 @@ export function decompressWithModel(output: Output, model: Model, options: Compr
 export interface OptimizerProgressInfo<Params = number[]> {
     pass: string;
     passRatio?: number;
-    /** @deprecated Use {@link OptimizerProgressInfo.passRatio} instead */
-    temperature: number;
     current: Params;
     currentSize: number;
     currentRejected: boolean;
@@ -134,13 +132,6 @@ export interface OptimizerResult<Params = number[]> {
 }
 
 export function defaultSparseSelectors(numContexts?: number): number[];
-
-/** @deprecated Use {@link Packer#optimize} instead */
-export function optimizeSparseSelectors(
-    selectors: number[],
-    calculateSize: (selectors: number[]) => number,
-    progress?: (info: OptimizerProgressInfo<number[]>) => undefined | boolean | Promise<undefined | boolean>,
-): Promise<OptimizerResult<number[]>>;
 
 export const enum InputType {
     JS = 'js',
@@ -175,10 +166,6 @@ export interface PackerOptions {
     modelRecipBaseCount?: number;
     arrayBufferPool?: ArrayBufferPool;
     recipLearningRate?: number;
-    /** @deprecated use {@link PackerOptions.recipLearningRate} */
-    learningRateNum?: number;
-    /** @deprecated use {@link PackerOptions.recipLearningRate} */
-    learningRateDenom?: number;
     numAbbreviations?: number;
     allowFreeVars?: boolean;
 }
@@ -197,11 +184,6 @@ export class Packer {
     constructor(inputs: Input[], options: PackerOptions);
     readonly memoryUsageMB: number;
     makeDecoder(): Packed;
-
-    /** @deprecated */
-    optimizeSparseSelectors(
-        progress?: (info: OptimizerProgressInfo<number[]>) => undefined | boolean | Promise<undefined | boolean>,
-    ): Promise<OptimizerResult<number[]>>;
 
     optimize(
         progress?: (info: OptimizerProgressInfo<OptimizedPackerOptions>) => undefined | boolean | Promise<undefined | boolean>,
