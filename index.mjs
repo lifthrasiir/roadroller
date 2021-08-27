@@ -44,6 +44,11 @@ const ceilLog2 = (x, y = 1) => {
     return n;
 };
 
+// Node.js 14 doesn't have a global performance object.
+const getPerformanceObject = async () => {
+    return globalThis.performance || (await import('perf_hooks')).performance;
+};
+
 //------------------------------------------------------------------------------
 
 export class ArrayBufferPool {
@@ -576,6 +581,8 @@ export const defaultSparseSelectors = (numContexts = 12) => {
 };
 
 export const optimizeSparseSelectors = async (selectors, calculateSize, progress) => {
+    const performance = await getPerformanceObject();
+
     let current = selectors.slice();
     let currentSize = calculateSize(selectors);
     let best = selectors.slice();
@@ -1254,6 +1261,7 @@ export class Packer {
     }
 
     async optimize(progress) {
+        const performance = await getPerformanceObject();
         const copy = v => JSON.parse(JSON.stringify(v));
 
         let maxAbbreviations = -1;
