@@ -1030,6 +1030,13 @@ export class Packer {
             [`π`, `new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(1<<${precision - 1})`],
             [`κ`, `new Uint${countBits}Array(${numModels}<<${contextBits})`],
         ];
+        if (!options.allowFreeVars) {
+            secondLineInit.unshift([`ο`, `[]`]);
+            secondLineInit.push([`ρ`, `0`], [`λ`, `0`]);
+            if (quotes.length > 0) {
+                secondLineInit.push([`χ`, `0`]);
+            }
+        }
 
         let secondLine =
             // ο: decoded data
@@ -1037,17 +1044,17 @@ export class Packer {
             // λ: write position in ο
             // χ: if in string the quote character code, otherwise 0 (same to state.quote)
             // we know the exact input length, so we don't have the end of data symbol
-            `for(ο=[ρ=λ=${quotes.length > 0 ? 'χ=' : ''}0];` +
+            `for(${options.allowFreeVars ? `ο=[ρ=λ=${quotes.length > 0 ? 'χ=' : ''}0]` : ''};` +
 
                 // 2. read until the known length
                 `λ<${inputLength};` +
 
+            (quotes.length > 0 ?
                 // 7. code to be executed after reading one byte
                 //
                 // ν is now the decode byte plus additional topmost 1 bit, write (and keep) it
                 `ο[λ++]=ν-=${1 << inBits}` +
 
-            (quotes.length > 0 ?
                 // update χ according to ν
                 `,χ=χ?` +
                     // if we are in ν string we either keep χ or reset to 0 if χ appeared again
@@ -1057,7 +1064,10 @@ export class Packer {
                     (quotes.length > 1 ?
                         `(${quotes.map(q => `ν==${q}`).join('|')})&&ν` :
                         `ν==${quotes[0]}&&ν`)
-            : '') +
+            :
+                // same as above but don't need to keep ν
+                `ο[λ++]=ν-${1 << inBits}`
+            ) +
 
             `)` +
 
