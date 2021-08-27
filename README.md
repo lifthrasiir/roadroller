@@ -30,9 +30,7 @@ const options = {
 };
 
 const packer = new Packer(inputs, options);
-
-// this typically takes about a minute or two, can be omitted if you want.
-await packer.optimize();
+await packer.optimize(); // takes less than 10 seconds by default
 
 const { firstLine, secondLine } = packer.makeDecoder();
 console.log(firstLine + '\n' + secondLine);
@@ -45,8 +43,8 @@ By default Roadroller receives your JS code and returns a compressed JS code tha
 The resulting code will look like this:
 
 ```javascript
-A='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'
-t=12345678;M=1<<17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint16Array(12<<21).fill(M/4);/* omitted */;eval(c)
+eval(Function("[M='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'"
+,...']charCodeAtUinyxp',"for(;e<12345;c[e++]=p-128)/* omitted */;return o")([],[],12345678,/* omitted */))
 ```
 
 The first line is a compressed data. It can contain control characters `` (U+001C) that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
@@ -81,13 +79,15 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 **Input action** (CLI `-a|--action ACTION`, API `action` in the input object) determines what to do with the decompressed data. <!--All action except for the evaluate produces a value to the variable named `_` by default, which is either a value itself for a single input and an array of values for multiple inputs.-->
 
-* <!--*(JS, text only)*--> **Evaluate** (`eval`) evaluates the decompressed JavaScript code. If there are multiple inputs there should be exactly one JavaScript input with evaluate action, since subsequent inputs will be decompressed in that code. The resulting value is always a code string, which may include decoders for subsequent inputs.
+* <!--*(JS, text only)*-->
+  **Evaluate** (`eval`) evaluates the decompressed JavaScript code. If there are multiple inputs there should be exactly one JavaScript input with evaluate action, since subsequent inputs will be decompressed in that code. The resulting value is always a code string, which may include decoders for subsequent inputs.
 
 <!--* *(JS, text only)* **JSON decode** (`json`) parses and returns a JSON value with `JSON.parse`.-->
 
 <!--* *(No binary)* **String** (`string`) returns a string.-->
 
-* <!--*(No binary)*--> **Write to document** (`write`) writes a decompressed string to `document`. Typically used with HTML.
+* <!--*(No binary)*-->
+  **Write to document** (`write`) writes a decompressed string to `document`. Typically used with HTML.
 
 <!--* **Array** (`array`) returns an array of bytes.-->
 
@@ -105,23 +105,35 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 **Number of contexts** (CLI `-S|--selectors xCOUNT`) relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
 
-**Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used for decompression. Increasing or decreasing memory usage mostly affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture; `-v` will print the actual memory usage to stderr. The default is 150 MB and a larger value is not recommended for various reasons:
+**Maximum memory usage** (CLI `-M|--max-memory MEGABYTES`, API `maxMemoryMB` in the options object) configures the maximum memory to be used for decompression. Increasing or decreasing memory usage mostly affects the compression ratio and not the run time. The default is 150 MB and a larger value is not recommended for various reasons:
 
 * Any further gain for larger memory use is negligible for typical inputs less than 100 KB.
 
 * The compression may use more memory than the decompression: an one-shot compression may use up to 50% more memory, the optimizer will use 50% more on top of that.
 
-* It does take time to allocate and initialize a larger memory (~500 ms), so it is not a good choice for small inputs.
+* It does take time to allocate and initialize a larger memory (~500 ms for 1 GB), so it is not a good choice for small inputs.
+
+The actual memory usage can be as low as a half of the specified due to the internal architecture; `-v` will print the actual memory usage to stderr.
 
 **Allowing the decoder to pollute the global scope** (CLI `-D|--dirty`, API `allowFreeVars` in the options object) is unsafe especially when the Roadroller output should coexist with other code or there are elements with single letter `id` attributes and turned off by default. But if you can control your environment (typical for demos), you can turn this on for a smaller decoder.
 
-**Optimize contexts** (CLI `-O|--optimize 1`, API `Packer.optimize`) searches for better modelling parameters. If parameters are already given the optimizer will try to improve upon that. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
+**Optimize parameters** (CLI `-O|--optimize LEVEL`, API `Packer.optimize`) searches for better modelling parameters. If parameters are already given the optimizer will try to improve upon that, and the optimizer prints best parameters at the end which can be reused for faster iteration. Parameters are solely related to the compression ratio so you can try this as many as you can afford. Each level does the following:
 
-* The additional argument in the CLI indicates the level of efforts, which can be 0 (do nothing) or 1 (use the default setting, takes about a minute); other values are reserved for the future expansion. The resulting parameters are printed at the end which can be reused for faster iteration.
+* Level 0 does absolutely nothing and uses given parameters or default parameters if none. This is the default when any optimizable parameters are given.
 
-* While not strictly required, `Packer.optimize` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
+* Level 1 runs a quick search with about 30 sets of parameters and takes less than 10 seconds for typical 30 KB input. This is the default when no optimizable parameters are given, and intended for the typical build process.
+
+* Level 2 runs a thorough search with about 300 sets of parameters and takes about a minute or two. This is best useful for the release build and you would like to save best parameters for later uses.
+
+While not strictly required, `Packer.optimize` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
 
 ### Advanced Configuration
+
+**Number of context bits** (CLI `-Zco|--context-bits BITS`, API `contextBits` in the options object) sets the size of individual model as opposed to the total memory use (`-M`), which is a product of the number of context and the size of each model. This explicit option is most useful for the fair benchmarking, since some parameters like `-Zpr` or `-Zmc` affect the memory use and therefore this parameter.
+
+<!--**Optimize for uncompressed size** (CLI `--uncompressed-only`) assumes the absence of the outer comperssion algorithm like DEFLATE. This is *bad* for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
+
+> Following parameters can be automatically optimized and normally you don't have to touch them unless you want to reproduce a particular set of parameters. As such, the default optimization (`-O1`) is disabled if any of these arguments are given in the CLI.
 
 **Chosen contexts** (CLI `-S|--selectors SELECTOR,SELECTOR,...`, API `sparseSelectors` in the options object) determine which byte contexts are used for each model. <i>K</i>th bit of the number (where K > 0) is set if the context contains the <i>K</i>th-to-last byte: 5 = 101<sub>(2)</sub> for example would correspond to the context of the last byte and third-to-last byte, also called a sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
 
@@ -135,10 +147,6 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 **Number of abbreviations** (CLI `-Zab|--num-abbreviations NUM`, API `numAbbreviations` in the options object) affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
 
-**Number of context bits** (CLI `-Zco|--context-bits BITS`, API `contextBits` in the options object) sets the size of individual model as opposed to the total memory use (`-M`), which is a product of the number of context and the size of each model. This explicit option is most useful for the fair benchmarking, since some parameters like `-Zpr` or `-Zmc` affect the memory use and therefore this parameter.
-
-<!--**Optimize for uncompressed size** (CLI `--uncompressed-only`) assumes the absence of the outer comperssion algorithm like DEFLATE. This is *bad* for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
-
 ### Tips and Tricks
 
 * The current algorithm slightly prefers 7-bit and 8-bit inputs for the decoder simplicity. You can still use emojis and other tricks that stuff many bits into Unicode code points, but the compression ratio might be decreased. Keep in mind that Roadroller is already doing the hard work for you and you might not need to repeat that.
@@ -147,13 +155,15 @@ Each input can be further configured by input type and action. In the CLI you pu
 
 * Roadroller, while being super effective for many inputs, is not a panacea. Roadroller is weaker at exploiting the duplication at a distance than DEFLATE. Make sure to check ADVZIP/Zopfli out.
 
+See also the [wiki] for more information.
+
 ## Compatibility
 
 Roadroller itself and resulting packed codes are ECMAScript 2015 (ES6) compatible and should run in every modern Web browser and JS implementation. Implementations are assumed to be reasonably fast but otherwise it can run in slower interpreters. MSIE is not directly supported but it works fine (slowly) after simple transpiling.
 
 Roadroller and packed codes extensively use `Math.exp` and `Math.log` that are [implementation-approximated](https://262.ecma-international.org/#implementation-approximated), so there is a small but real possibility that they behave differently in different implementations. This is known to be a non-issue for browser JS engines as well as V8 and node.js as they use the same math library (fdlibm) for those functions, but you have been warned.
 
-By comparison, the Roadroller CLI assumes more from the environment and requires Node.js 14 or later.
+By comparison, the Roadroller CLI assumes more from the environment and requires Node.js 14 or later. We strongly recommend Node.js 16 because Roadroller is significantly faster in 16 than in 14.
 
 ## Internals
 
@@ -173,6 +183,7 @@ The Roadroller compressor proper is licensed under the MIT license. In addition 
 
 [npm]: https://www.npmjs.com/package/roadroller
 [online]: https://lifthrasiir.github.io/roadroller/
+[wiki]: https://github.com/lifthrasiir/roadroller/wiki
 
 [js13kGames]: https://js13kgames.com/
 
