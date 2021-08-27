@@ -187,12 +187,9 @@ async function parseArgs(args) {
         } else if (m = matchOptArg('optimize', 'O')) {
             if (optimize !== undefined) throw 'duplicate --optimize arguments';
             optimize = Number(getArg(m));
-            if (optimize !== 0 && optimize !== 1) throw 'invalid --optimize argument';
         } else if (m = matchOptArg('max-memory', 'M')) {
             if (options.maxMemoryMB !== undefined) throw 'duplicate --max-memory arguments';
-            if (options.contextBits !== undefined) throw '--max-memory cannot be used with --context-bits';
             options.maxMemoryMB = parseInt(getArg(m), 10);
-            if (!(10 <= options.maxMemoryMB && options.maxMemoryMB <= 1024)) throw 'invalid --max-memory argument';
         } else if (m = matchOptArg('dirty', 'D')) {
             if (options.allowFreeVars !== undefined) throw 'duplicate --dirty arguments';
             options.allowFreeVars = true;
@@ -207,50 +204,26 @@ async function parseArgs(args) {
                 selectors = defaultSparseSelectors(numContexts);
             } else {
                 selectors = arg.split(/,/g).map(v => parseInt(v, 10)).sort((a, b) => a - b);
-                if (selectors.length < 1) throw 'no selectors in --selectors argument';
-                if (selectors.length > 64) throw 'too many selectors in --selectors argument';
-                if (selectors.some(sel => sel !== sel || sel < 0 || sel >= 0x80000000)) {
-                    throw 'invalid selector in --selectors argument';
-                }
-                if (selectors.find((sel, i) => selectors[i-1] === sel)) {
-                    throw 'duplicate selector in --selectors argument';
-                }
             }
             options.sparseSelectors = selectors;
         } else if (m = matchOptArg('num-abbreviations', 'Zab')) {
             if (options.numAbbreviations !== undefined) throw 'duplicate --num-abbreviations arguments';
             options.numAbbreviations = parseInt(getArg(m), 10);
-            if (options.numAbbreviations < 0 || options.numAbbreviations > 64) {
-                throw 'invalid --num-abbreviations argument';
-            }
         } else if (m = matchOptArg('context-bits', 'Zco')) {
             if (options.contextBits !== undefined) throw 'duplicate --context-bits arguments';
-            if (options.maxMemoryMB !== undefined) throw '--context-bits cannot be used with --max-memory';
             options.contextBits = parseInt(getArg(m), 10);
-            if (options.contextBits < 1 || options.contextBits > 30) throw 'invalid --context-bits argument';
-            // additional check below
         } else if (m = matchOptArg('learning-rate', 'Zlr')) {
             if (options.recipLearningRate !== undefined) throw 'duplicate --learning-rate arguments';
             options.recipLearningRate = parseInt(getArg(m), 10);
-            if (options.recipLearningRate < 1 || options.recipLearningRate > 2**53) {
-                throw 'invalid --learning-rate argument';
-            }
         } else if (m = matchOptArg('model-max-count', 'Zmc')) {
             if (options.modelMaxCount !== undefined) throw 'duplicate --model-max-count arguments';
             options.modelMaxCount = parseInt(getArg(m), 10);
-            if (options.modelMaxCount < 1 || options.modelMaxCount > 32767) {
-                throw 'invalid --model-max-count argument';
-            }
         } else if (m = matchOptArg('model-base-divisor', 'Zmd')) {
             if (options.modelRecipBaseCount !== undefined) throw 'duplicate --model-base-divisor arguments';
             options.modelRecipBaseCount = parseInt(getArg(m), 10);
-            if (options.modelRecipBaseCount < 1 || options.modelRecipBaseCount >= 2**53) {
-                throw 'invalid --model-base-divisor argument';
-            }
         } else if (m = matchOptArg('precision', 'Zpr')) {
             if (options.precision !== undefined) throw 'duplicate --precision arguments';
             options.precision = parseInt(getArg(m), 10);
-            if (options.precision < 1 || options.precision > 28) throw 'invalid --precision argument';
         } else if (opt == '--') {
             nextIsArg = true;
         } else {
@@ -262,19 +235,58 @@ async function parseArgs(args) {
         throw 'the last input path is missing';
     }
 
+    const between = (a, v, b) => a <= v && v <= b; // also returns false if v is NaN
+
+    // check validity of arguments
+    if (outputPath === undefined) {
+        outputPath = '-';
+    }
+    if (optimize === undefined) {
+        optimize = 0;
+    } else if (!between(0, optimize, 1)) {
+        throw 'invalid --optimize argument';
+    }
+    if (options.maxMemoryMB !== undefined) {
+        if (options.contextBits !== undefined) throw '--max-memory and --context-bits cannot be used together';
+        if (!between(10, options.maxMemoryMB, 1024)) throw 'invalid --max-memory argument';
+    } else if (options.contextBits !== undefined) {
+        if (!between(1, options.contextBits, 30)) throw 'invalid --context-bits argument';
+        const numSelectors = options.sparseSelectors ? options.sparseSelectors.length : 12;
+        // this implies that -Zco24 unconditionally works but -Zco25..30 may not work depending on -Sx
+        if (numSelectors * (1 << options.contextBits) > (1 << 30)) throw 'invalid --context-bits argument';
+    }
+    if (options.sparseSelectors !== undefined) {
+        if (options.sparseSelectors.length < 1) throw 'no selectors in --selectors argument';
+        if (options.sparseSelectors.length > 64) throw 'too many selectors in --selectors argument';
+        if (options.sparseSelectors.some(sel => sel !== sel || sel < 0 || sel >= 0x80000000)) {
+            throw 'invalid selector in --selectors argument';
+        }
+        if (options.sparseSelectors.find((sel, i) => options.sparseSelectors[i-1] === sel)) {
+            throw 'duplicate selector in --selectors argument';
+        }
+    }
+    if (options.numAbbreviations !== undefined && !between(0, options.numAbbreviations, 64)) {
+        throw 'invalid --num-abbreviations argument';
+    }
+    if (options.recipLearningRate !== undefined && !between(1, options.recipLearningRate, 2**53)) {
+        throw 'invalid --learning-rate argument';
+    }
+    if (options.modelMaxCount !== undefined && !between(1, options.modelMaxCount, 32767)) {
+        throw 'invalid --model-max-count argument';
+    }
+    if (options.modelRecipBaseCount !== undefined && !between(1, options.modelRecipBaseCount, 2**53 - 1)) {
+        throw 'invalid --model-base-divisor argument';
+    }
+    if (options.precision !== undefined && !between(1, options.precision, 28)) {
+        throw 'invalid --precision argument';
+    }
+
     if (inputs.length === 0) {
         command = 'default';
     }
     if (command) {
         return { command, verbose };
     }
-
-    if (optimize === undefined) optimize = 0;
-    if (outputPath === undefined) outputPath = '-';
-
-    // this implies that -Zco24 unconditionally works but -Zco25..30 may not work depending on -Sx
-    const numSelectors = options.sparseSelectors ? options.sparseSelectors.length : 12;
-    if (numSelectors * (1 << options.contextBits) > (1 << 30)) throw 'invalid --context-bits argument';
 
     return { command: 'compress', inputs, options, optimize, outputPath, verbose };
 }
