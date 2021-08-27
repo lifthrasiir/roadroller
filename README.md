@@ -51,9 +51,7 @@ The first line is a compressed data. It can contain control characters `` (U+00
 
 The second line is a compressor tuned for this particular input. By default the decompressed data immediately goes through `eval`, but you can configure what to do with that.
 
-The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from [AdvanceCOMP] or the aforementioned Zopfli. It is also possible but not recommended\* to put the first line to a separate file and load it with a separate `<script>` tag.
-
-> \* This is not recommended because any additional file to ZIP incurs at least 88+2n bytes of overhead where n is the length of file name and that overhead mostly negates the additional compression. Instead put everything into a single file and run ADVZIP or Zopfli.
+The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from [AdvanceCOMP] or the aforementioned Zopfli. The first line and second line may form a single statement as above so they should not be separated; you can only put whitespace between them.
 
 <!--
 ### Multiple Inputs
