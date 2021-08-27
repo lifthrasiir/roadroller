@@ -51,6 +51,11 @@ Output options:
 -M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
   Configures the maximum memory usage.
   The actual usage might be lower. Use -v to print the actual usage.
+-D|--dirty [Default: false]
+  Allow the decoder to pollute the global scope.
+  This is unsafe in general, but if you know that this is safe
+  (i.e. no script in the global scope, no single-letter ids in use)
+  then this can shave a few more bytes from the decoder.
 -S|--selectors xNUMCONTEXTS [Range: 1..64, Default: 12]
   Sets the maximum number of contexts used, prefixed by a literal "x".
   For 13+ contexts additional contexts are randomly picked.
@@ -185,9 +190,12 @@ async function parseArgs(args) {
             if (optimize !== 0 && optimize !== 1) throw 'invalid --optimize argument';
         } else if (m = matchOptArg('max-memory', 'M')) {
             if (options.maxMemoryMB !== undefined) throw 'duplicate --max-memory arguments';
-            if (options.maxMemoryMB !== undefined) throw '--max-memory cannot be used with --context-bits';
+            if (options.contextBits !== undefined) throw '--max-memory cannot be used with --context-bits';
             options.maxMemoryMB = parseInt(getArg(m), 10);
             if (!(10 <= options.maxMemoryMB && options.maxMemoryMB <= 1024)) throw 'invalid --max-memory argument';
+        } else if (m = matchOptArg('dirty', 'D')) {
+            if (options.allowFreeVars !== undefined) throw 'duplicate --dirty arguments';
+            options.allowFreeVars = true;
         } else if (m = matchOptArg('selectors', 'S')) {
             if (options.sparseSelectors !== undefined) throw 'duplicate --max-memory arguments';
             const arg = getArg(m);
