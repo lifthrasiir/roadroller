@@ -1192,7 +1192,7 @@ export class Packer {
 
             // undocumented, mainly used for debugging
             'console': [false, `console.log(`, `)`],
-            'return': [false, ``, ``],
+            'return': [true, ``, ``],
         }[input.action];
 
         const placeholderNames =
@@ -1212,6 +1212,7 @@ export class Packer {
             (quotes.length > 0 ? 'f' : ''); // from `for`
 
         if (options.allowFreeVars) {
+            firstLine += ';';
             secondLine = secondLineInit.map(([v, e]) => `${v}=${e};`).join('') + secondLine + prefix + outputVar + suffix;
         } else {
             // the function call will look like this:

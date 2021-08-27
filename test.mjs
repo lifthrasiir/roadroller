@@ -344,7 +344,8 @@ function packAndEval(data, options = {}) {
     const { firstLine, secondLine, freeVars } = packer.makeDecoder();
 
     // Roadroller outputs use `with`, so we need to break the strictness inheritance with Function
-    return Function('code', 'return eval(code)')(`let ${freeVars.join(',')};${firstLine};${secondLine}`);
+    return Function('code', 'return eval(code)')(
+        `var unused${freeVars.map(v => ',' + v).join('')};${firstLine}${secondLine}`);
 }
 
 function packAndReturn(data, options = {}) {
