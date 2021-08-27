@@ -41,11 +41,13 @@ INPUT
 Output options:
 -o|--output-file OUTPUT [Default: -]
   The output path. Can be "-" for stdout.
--O|--optimize EFFORTS [Default: 0]
+-O|--optimize EFFORTS [Default: 0 or 1]
   Tries to tune parameters for this input.
     0   Use the baseline parameters.
+        Default when any optimizable arguments are given.
     1   Tries to optimize -S and most -Z arguments with ~30 attempts.
         Also tries to replace "-t js" with "-t text" if beneficial.
+        Default when no optimizable arguments are given.
     2   Same to -O1 but with ~300 attempts.
   Anything beyond -O0 prints the best parameters unless -q is given.
 -M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
@@ -118,6 +120,7 @@ async function parseArgs(args) {
     };
     let command;
     let optimize;
+    let defaultOptimize = 1;
     let outputPath;
     let nextIsArg = false;
     let verbose = 0; // -1: -q, 0: default, 1: -v, 2: -vv, ...
@@ -204,26 +207,33 @@ async function parseArgs(args) {
                 selectors = defaultSparseSelectors(numContexts);
             } else {
                 selectors = arg.split(/,/g).map(v => parseInt(v, 10)).sort((a, b) => a - b);
+                defaultOptimize = 0;
             }
             options.sparseSelectors = selectors;
         } else if (m = matchOptArg('num-abbreviations', 'Zab')) {
             if (options.numAbbreviations !== undefined) throw 'duplicate --num-abbreviations arguments';
             options.numAbbreviations = parseInt(getArg(m), 10);
+            defaultOptimize = 0;
         } else if (m = matchOptArg('context-bits', 'Zco')) {
             if (options.contextBits !== undefined) throw 'duplicate --context-bits arguments';
             options.contextBits = parseInt(getArg(m), 10);
+            // -Zco is not optimizable, so its use doesn't change -O defaults
         } else if (m = matchOptArg('learning-rate', 'Zlr')) {
             if (options.recipLearningRate !== undefined) throw 'duplicate --learning-rate arguments';
             options.recipLearningRate = parseInt(getArg(m), 10);
+            defaultOptimize = 0;
         } else if (m = matchOptArg('model-max-count', 'Zmc')) {
             if (options.modelMaxCount !== undefined) throw 'duplicate --model-max-count arguments';
             options.modelMaxCount = parseInt(getArg(m), 10);
+            defaultOptimize = 0;
         } else if (m = matchOptArg('model-base-divisor', 'Zmd')) {
             if (options.modelRecipBaseCount !== undefined) throw 'duplicate --model-base-divisor arguments';
             options.modelRecipBaseCount = parseInt(getArg(m), 10);
+            defaultOptimize = 0;
         } else if (m = matchOptArg('precision', 'Zpr')) {
             if (options.precision !== undefined) throw 'duplicate --precision arguments';
             options.precision = parseInt(getArg(m), 10);
+            defaultOptimize = 0;
         } else if (opt == '--') {
             nextIsArg = true;
         } else {
@@ -242,7 +252,7 @@ async function parseArgs(args) {
         outputPath = '-';
     }
     if (optimize === undefined) {
-        optimize = 0;
+        optimize = defaultOptimize;
     } else if (!between(0, optimize, 2)) {
         throw 'invalid --optimize argument';
     }
