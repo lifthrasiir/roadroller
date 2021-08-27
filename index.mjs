@@ -663,6 +663,7 @@ export class Packer {
             contextBits: options.contextBits,
             arrayBufferPool: options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
+            allowFreeVars: options.allowFreeVars,
         };
 
         this.inputsByType = {};
@@ -916,7 +917,10 @@ export class Packer {
         // TODO again, this should be controlled dynamically
         const modelQuotes = preparedJs.code.length > 0;
 
-        const { sparseSelectors, precision, modelMaxCount, modelRecipBaseCount, recipLearningRate } = options;
+        const {
+            sparseSelectors, precision, modelMaxCount, modelRecipBaseCount,
+            recipLearningRate, allowFreeVars,
+        } = options;
         const contextBits = options.contextBits || contextBitsFromMaxMemory(options);
 
         const compressOptions = { ...options, inBits, outBits, modelQuotes, contextBits };
@@ -1004,19 +1008,23 @@ export class Packer {
         }
         firstLine += `'`;
 
-        let secondLine =
-            // 1. initialize other variables
-            //
-            // τ: rANS state
-            // ω: weights
-            // π: predictions
-            // κ: counts
-            `τ=${state};` +
-            `θ=1<<${precision + 1};` +
-            `ω=${JSON.stringify(Array(numModels).fill(0))};` +
-            `π=new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(${pow2(precision - 1)});` +
-            `κ=new Uint${countBits}Array(${numModels}<<${contextBits});` +
+        // 1. initialize other variables
+        // the exact position of initialization depends on the options.
+        //
+        // τ: rANS state
+        // θ: common scaling factor
+        // ω: weights
+        // π: predictions
+        // κ: counts
+        const secondLineInit = [
+            [`τ`, `${state}`],
+            [`θ`, `1<<${precision + 1}`],
+            [`ω`, `${JSON.stringify(Array(numModels).fill(0))}`],
+            [`π`, `new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(1<<${precision - 1})`],
+            [`κ`, `new Uint${countBits}Array(${numModels}<<${contextBits})`],
+        ];
 
+        let secondLine =
             // ο: decoded data
             // ρ: read position in ι
             // λ: write position in ο
@@ -1126,7 +1134,8 @@ export class Packer {
             `);`;
 
         // 9. postprocessing
-        // also should clobber π and κ to trigger the GC as soon as possible
+        // also should clobber π and κ unless they are function arguments,
+        // so that the GC can free the memory as soon as possible.
         let outputVar = 'κ'; // can be replaced with assignment statements if possible
 
         const [input] = inputsByType['text'] || inputsByType['js'];
@@ -1137,9 +1146,9 @@ export class Packer {
 
             case 'js':
                 if (preparedJs.abbrs.length === 0) {
-                    outputVar = `κ=π=${stringifiedInput()}`;
+                    outputVar = `κ=${options.allowFreeVars ? 'π=' : ''}${stringifiedInput()}`;
                 } else if (preparedJs.abbrs.length < 3) {
-                    secondLine += `κ=π=${stringifiedInput()};`;
+                    secondLine += `κ=${options.allowFreeVars ? 'π=' : ''}${stringifiedInput()};`;
                     for (const [, abbr] of preparedJs.abbrs) {
                         secondLine += `with(κ.split(\`${escapeCharInTemplate(abbr)}\`))` +
                             `κ=join(shift());`;
@@ -1158,37 +1167,62 @@ export class Packer {
                 break;
         }
 
-        switch (input.action) {
-            case 'eval':
-                // TODO is it significantly slower than the indirect eval `(0,eval)`?
-                secondLine += `eval(${outputVar})`;
-                break;
-            case 'write':
-                secondLine += `document.write(${outputVar})`;
-                break;
-            case 'console': // undocumented, mainly used for debugging
-                secondLine += `console.log(${outputVar})`;
-                break;
-            case 'return': // undocumented, mainly used for debugging
-                secondLine += outputVar;
-                break;
+        const [scopeSensitive, prefix, suffix] = {
+            // TODO is it significantly slower than the indirect eval `(0,eval)`?
+            'eval': [true, `eval(`, `)`],
+
+            'write': [false, `document.write(`, `)`],
+
+            // undocumented, mainly used for debugging
+            'console': [false, `console.log(`, `)`],
+            'return': [false, ``, ``],
+        }[input.action];
+
+        const placeholderNames =
+            'ι' +
+            // initialized from function arguments, so should be the first
+            secondLineInit.map(([v]) => v).join('') +
+            // remaining variables can be in any order
+            [...'Σαβδεθκλμνοπρτφχω']
+                .filter(v => secondLineInit.every(([w]) => v !== w)).join('');
+        const actualNames =
+            // should use letters from existing names that we can't remove,
+            // so that we can keep the Huffman tree small
+            'M' + // from `Math`
+            'charCodeAt' +
+            'Uiny' + // from `Uint##Array`, the best possible without any further duplicate
+            'xp' + // from `exp`
+            (quotes.length > 0 ? 'f' : ''); // from `for`
+
+        if (options.allowFreeVars) {
+            secondLine = secondLineInit.map(([v, e]) => `${v}=${e};`).join('') + secondLine + prefix + outputVar + suffix;
+        } else {
+            // the function call will look like this:
+            //   ([M='...',],c,h,a,r,C,o,d,e,...)=>{...})([], /*initial expressions for c, h, ...*/)
+            // this is possible because Function arguments are simply concatenated with commas.
+            // fun fact: this even allows for `Function('a="foo','bar"','return a')()`!
+            firstLine = `Function("[${firstLine}"`;
+            secondLine = `,...']${actualNames.slice(1)}',"` + secondLine;
+            const args = `[],` + secondLineInit.map(([, e]) => e).join(',');
+            if (scopeSensitive) {
+                // we can't put the final call into the eval, so we should alter firstLine
+                firstLine = prefix + firstLine;
+                const needSpace = outputVar.match(/^[A-Za-z0-9_$\u0380-\u03ff]/);
+                secondLine += `return${needSpace ? ' ' : ''}${outputVar}")(${args})${suffix}`;
+            } else {
+                secondLine += `${prefix}${outputVar}${suffix}")(${args})`;
+            }
         }
 
-        const idMap = {
-            'Σ': 'm', 'α': 'y', 'β': 'e', 'δ': 'C', 'ε': 'x',
-            'θ': 'M', 'ι': 'A', 'κ': 'c', 'λ': 'l', 'μ': 'i',
-            'ν': 'a', 'ο': 'o', 'π': 'p', 'ρ': 'r', 'τ': 't',
-            'φ': 'u', 'ω': 'w',
-        };
-        if (quotes.length > 0) {
-            idMap['χ'] = 'f';
-        }
-
-        firstLine = firstLine.replace(/[^\0-\x7f]/g, v => idMap[v]);
-        secondLine = secondLine.replace(/[^\0-\x7f]/g, v => idMap[v]);
+        // remap greek letters to the actual mapping
+        const idMap = new Map([...placeholderNames].map((v, i) => [v, actualNames[i]]));
+        firstLine = firstLine.replace(/[^\0-\x7f]/g, v => idMap.get(v));
+        secondLine = secondLine.replace(/[^\0-\x7f]/g, v => idMap.get(v));
 
         const boundVars = ['δ', 'μ']; // always local to .map()
-        const freeVars = Object.keys(idMap).filter(v => !boundVars.includes(v)).map(v => idMap[v]).sort();
+        const freeVars = options.allowFreeVars ?
+            Object.keys(idMap).filter(v => !boundVars.includes(v)).map(v => idMap[v]).sort() :
+            [];
 
         return {
             firstLine,

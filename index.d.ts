@@ -180,6 +180,7 @@ export interface PackerOptions {
     /** @deprecated use {@link PackerOptions.recipLearningRate} */
     learningRateDenom?: number;
     numAbbreviations?: number;
+    allowFreeVars?: boolean;
 }
 
 export interface OptimizedPackerOptions {
