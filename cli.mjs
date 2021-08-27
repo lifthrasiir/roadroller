@@ -291,7 +291,7 @@ async function parseArgs(args) {
         throw 'invalid --precision argument';
     }
 
-    if (inputs.length === 0) {
+    if (!command && inputs.length === 0) {
         command = 'default';
     }
     if (command) {
