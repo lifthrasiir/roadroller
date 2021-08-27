@@ -1455,8 +1455,13 @@ class Packed {
         // if the original data is N bytes the first line will contain about 4/3 N codes,
         // 1/64 of which will have to use one additional bit.
         // therefore the estimated overhead is 4/3 N * 1/64 [bits] = N/384 [bytes].
-        // the additional 35 bytes are experimentally derived from the Huffman tree coding.
-        return 35 + Math.ceil(this.firstLineLengthInBytes * (1 + 1/384)) + estimateDeflatedSize(this.secondLine);
+        // we then add the number of "incompressible" (>= 7 bits) bytes from the first line;
+        // the final additional 35 bytes are experimentally derived from the Huffman tree coding.
+        const incompressibleFirstLineLength = this.firstLine.replace(/[\x1c\x3f-\x7e]/g, '').length;
+        return (35 +
+            incompressibleFirstLineLength +
+            Math.ceil(this.firstLineLengthInBytes * (1 + 1/384)) +
+            estimateDeflatedSize(this.secondLine));
     }
 }
 
