@@ -105,13 +105,14 @@ input[type=number] { width: 5em; }
 <footer><ul>
 <li><label>Number of contexts: <input id=$numcontexts type=number value=12 min=1 max=64></label> <a href=#num-contexts title=Help>ℹ️</a>
 <li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>96</span> MB in use)</label> <a href=#max-memory title=Help>ℹ️</a>
+<li><label><input type=checkbox id=$dirty> Allow the decoder to pollute the global scope</label> <a href=#dirty title=Help>ℹ️</a>
 <li><button id=$reset>Reset parameters</button> <button id=$optimize>Optimize parameters</button> <a href=#optimize title=Help>ℹ️</a>
 </ul><details><summary>Advanced configuration</summary><ul>
-<!--<li><label>Output variable name: <input id=$outputvar pattern=([A-Za-z_$][0-9A-Za-z_$]*)? value=> <a href=#output-var title=Help>ℹ️</a>-->
 <li><label>Chosen contexts: <input id=$selectors pattern=\d+(,\d+)+ value=></label> <a href=#chosen-contexts title=Help>ℹ️</a>
 <li><label>Precision: <input id=$precision type=number value=16 min=1 max=21></label> <a href=#precision title=Help>ℹ️</a>
 <li><label>Learning rate: <input id=$learningrate type=number value=500 min=1 max=99999></label> <a href=#learning-rate title=Help>ℹ️</a>
 <li><label>Model max count: <input id=$modelmaxcount type=number value=5 min=1 max=32767></label> <a href=#model-max-count title=Help>ℹ️</a>
+<li><label>Model base divisor: <input id=$modelbasedivisor type=number value=20 min=1 max=99999></label> <a href=#model-base-divisor title=Help>ℹ️</a>
 <li><label>Number of abbreviations: <input id=$numabbrevs type=number value=64 min=0 max=64></label> <a href=#num-abbreviations title=Help>ℹ️</a>
 <!--<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size</label> <a href=#uncompressed-only title=Help>ℹ️</a>-->
 </ul></details></footer>
@@ -166,16 +167,17 @@ input[type=number] { width: 5em; }
 <h3>Output Configuration</h3>
 <p id=num-contexts><strong>Number of contexts</strong> relates to the complexity of modelling. The larger number of contexts will compress better, but at the expense of linear increase in both the time and memory usage. The default is 12, which targets at most 1 second of latency permitted for typical 30 KB input.
 <p id=max-memory><strong>Maximum memory usage</strong> configures the maximum memory to be used both for compression and decompression. Increasing or decreasing memory usage only affects the compression ratio and not the run time. The actual memory usage can be as low as a half of the specified due to the internal architecture. The default is 150 MB.
+<p id=dirty><strong>Allowing the decoder to pollute the global scope</strong> is unsafe especially when the Roadroller output should coexist with other code or there are elements with single letter <code>id</code> attributes and turned off by default. But if you can control your environment (typical for demos), you can turn this on for a smaller decoder.
 <p id=optimize><strong>Optimize parameters</strong> button searches for better modelling parameters. Parameters are solely related to the compression ratio so you can try this as many as you can afford.
 
 <h3>Advanced Configuration</h3>
-<!--<p id=output-var><strong>Output variable name</strong> sets the variable name for output values. If the name is empty, it is determined from the input code and typically named <code>_</code>. You don't need to change this unless you are doing a weird thing and the code can refer to variables that do not appear in verbatim.-->
 <!--<p id=uncompressed-only><strong>Optimize for uncompressed size</strong> assumes the absence of the outer comperssion algorithm like DEFLATE. This is <em>bad</em> for the compression since the compressor has to work strictly within the limits of JS source code including escape sequences. This should be the last resort where you can't even use the PNG-based self extraction and everything has to be in a single file.-->
 <p>Following parameters can be automatically optimized and normally you don't have to touch them unless you want to reproduce a particular set of parameters.
 <p id=chosen-contexts><strong>Chosen contexts</strong> determine which byte contexts are used for each model. <i>K</i>th bit of the number (where K > 0) is set if the context contains the <i>K</i>th-to-last byte: 5 = 101<sub>(2)</sub> for example would correspond to the context of the last byte and third-to-last byte, also called a sparse context (0,2). There is no particular limit for the number, but Roadroller only considers up to 9th order for the optimization process.
 <p id=precision><strong>Precision</strong> is the number of fractional bits used in the internal fixed point representation. This is shared between the entropy coder and context models and can't be decoupled. The default of 16 should be enough, you can also try to decrease it.
 <p id=learning-rate><strong>Learning rate</strong> adjusts how fast would the context mixer adapt, where smaller is faster. The default is 500 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try smaller numbers.
 <p id=model-max-count><strong>Model max count</strong> adjusts how fast would individual contexts adapt, where smaller is faster. The model adapts fastest when a particular context is first seen, but that process becomes slower as the context is seen multiple times. This parameter limits how slowest the adaptation process can be. The default of 5 is specifically tuned for JS code inputs.
+<p id=model-base-divisor><strong>Model base divisor</strong> adjusts how fast should individual contexts adapt <em>initially</em>, where larger is faster. The optimal value typically ranges from 10 to 100 for JS code inputs.
 <p id=num-abbreviations><strong>Number of abbreviations</strong> affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
 
 <h2>Command-line Usage and API</h2>
@@ -298,16 +300,19 @@ const initOutput = () => {
         refreshOutput();
     };
 
-    $maxmemory.onchange = () => refreshOutput();
-    $precision.onchange = () => refreshOutput();
-    $learningrate.onchange = () => refreshOutput();
-    $modelmaxcount.onchange = () => refreshOutput();
-    $numabbrevs.onchange = () => refreshOutput();
+    $maxmemory.onchange =
+    $precision.onchange =
+    $learningrate.onchange =
+    $modelmaxcount.onchange =
+    $modelbasedivisor.onchange =
+    $numabbrevs.onchange =
+    $dirty.onchange = () => refreshOutput();
 
     $reset.onclick = () => {
-        for (const input of [$maxmemory, $numcontexts, $selectors, $precision, $learningrate, $modelmaxcount, $numabbrevs]) {
+        for (const input of [$maxmemory, $numcontexts, $selectors, $precision, $learningrate, $modelmaxcount, $modelbasedivisor, $numabbrevs]) {
             input.value = input.getAttribute('value');
         }
+        $dirty.checked = false;
         refreshOutput();
     };
     $optimize.onclick = async () => {
@@ -389,6 +394,8 @@ const compress = async optimize => {
         if (!(1 <= recipLearningRate && recipLearningRate <= 99999)) throw 'invalid learning rate';
         const modelMaxCount = parseInt($modelmaxcount.value, 10);
         if (!(1 <= modelMaxCount && modelMaxCount <= 32767)) throw 'invalid model max count';
+        const modelRecipBaseCount = parseInt($modelbasedivisor.value, 10);
+        if (!(1 <= modelRecipBaseCount && modelRecipBaseCount <= 99999)) throw 'invalid model base divisor';
         const numAbbreviations = parseInt($numabbrevs.value, 10);
         if (!(0 <= numAbbreviations && numAbbreviations <= 64)) throw 'invalid number of abbreviations';
 
@@ -399,7 +406,9 @@ const compress = async optimize => {
             precision,
             recipLearningRate,
             modelMaxCount,
+            modelRecipBaseCount,
             numAbbreviations,
+            allowFreeVars: $dirty.checked,
         };
 
         let prefix = '';
@@ -423,6 +432,7 @@ const compress = async optimize => {
             if (result.best.sparseSelectors) sparseSelectors = result.best.sparseSelectors;
             if (result.best.precision) $precision.value = result.best.precision;
             if (result.best.modelMaxCount) $modelmaxcount.value = result.best.modelMaxCount;
+            if (result.best.modelRecipBaseCount) $modelbasedivisor.value = result.best.modelRecipBaseCount;
             if (result.best.recipLearningRate) $learningrate.value = result.best.recipLearningRate;
             if (result.best.numAbbreviations !== undefined) $numabbrevs.value = result.best.numAbbreviations;
             if (result.best.preferTextOverJS) {
