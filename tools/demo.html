@@ -28,8 +28,8 @@ th { background: #ffd07d80; white-space: nowrap; }
 ol, ul { list-style-position: inside; }
 pre { margin: 1em -0.5em; padding: 0.5em; overflow: auto; }
 code { padding: 0 0.1em; }
-.c\$1f { font-size: 0; }
-.c\$1f:before { font-size: 1rem; content: '<U+001F>'; background: #ffd07d; color: red; }
+.c\$1c { font-size: 0; }
+.c\$1c:before { font-size: 1rem; content: '<U+001C>'; background: #ffd07d; color: red; }
 address { margin: 3em 0 1em 0; color: #415aa6; }
 address svg { float: right; width: 3em; margin-top: -1.5em; vertical-align: middle; fill: currentcolor; }
 @media screen and (max-width: 62em) { body { margin: 0 1em; } }
@@ -122,8 +122,8 @@ input[type=number] { width: 5em; }
 <h2>Usage</h2>
 <p>By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP/gzip (or more accurately, <a href=https://en.wikipedia.org/wiki/Deflate>DEFLATE</a>). Ideally your JS code should be already minified, probably using <a href=https://terser.org/>Terser</a> or <a href=https://closure-compiler.appspot.com/home>Closure Compiler</a>; Roadroller only does a minimal whitespace and comment suppression.
 <p>The resulting code will look like this:
-<pre>A='Zos~ZyF_sTdvfgJ^bIq<span class=c$1f>&#31;</span>_wJWLGSIz}<span class=c$1f>&#31;</span>Chb?rMch}...'&#10;t=12345678;M=1&lt;&lt;17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint16Array(12&lt;&lt;21).fill(M/4);/* omitted */;eval(c)</pre>
-<p>The first line is a compressed data. It can contain control characters <code class=c$1f>&#31;</code> that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
+<pre>A='Zos~ZyF_sTdvfgJ^bIq<span class=c$1c>&#28;</span>_wJWLGSIz}<span class=c$1c>&#28;</span>Chb?rMch}...'&#10;t=12345678;M=1&lt;&lt;17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint16Array(12&lt;&lt;21).fill(M/4);/* omitted */;eval(c)</pre>
+<p>The first line is a compressed data. It can contain control characters <code class=c$1c>&#28;</code> that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
 <p>The second line is a compressor tuned for this particular input. By default the decompressed data immediately goes through <code>eval</code>, but you can configure what to do with that.
 <p>The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from <a href=http://www.advancemame.it/comp-readme>AdvanceCOMP</a> or the aforementioned Zopfli. It is also possible but not recommended<sup>*</sup> to put the first line to a separate file and load it with a separate <code>&lt;script&gt;</code> tag.
 <blockquote><p><small>* This is not recommended because any additional file to ZIP incurs at least 88+2n bytes of overhead where n is the length of file name and that overhead mostly negates the additional compression. Instead put everything into a single file and run ADVZIP or Zopfli.</small></blockquote>

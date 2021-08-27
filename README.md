@@ -49,7 +49,7 @@ A='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'
 t=12345678;M=1<<17;w=[0,0,0,0,0,0,0,0,0,0,0,0];p=new Uint16Array(12<<21).fill(M/4);/* omitted */;eval(c)
 ```
 
-The first line is a compressed data. It can contain control characters `` (U+001F) that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
+The first line is a compressed data. It can contain control characters `` (U+001C) that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
 
 The second line is a compressor tuned for this particular input. By default the decompressed data immediately goes through `eval`, but you can configure what to do with that.
 
