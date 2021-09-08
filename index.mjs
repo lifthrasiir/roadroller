@@ -959,17 +959,18 @@ export class Packer {
             return 'θ';
         };
 
-        // 0.
-        // ι: rANS output encoded in lowest 6 bits (higher bits are chosen to avoid backslash)
-        // this should be isolated from other code for the best DEFLATE result
+        // 0. first line
+        // ι: compressed data, where lowest 6 bits are used and higher bits are chosen to avoid escape sequences.
+        // this should be isolated from other code for the best DEFLATE result.
+        const sixBit = c => c === 0x1c || c === 0x3f ? c : c | 0x40;
         let firstLine = `ι='`;
         const CHUNK_SIZE = 8192;
         for (let i = 0; i < buf.length; i += CHUNK_SIZE) {
-            firstLine += String.fromCharCode(...buf.slice(i, i + CHUNK_SIZE).map(c => c === 0x1c || c === 0x3f ? c : c | 0x40));
+            firstLine += String.fromCharCode(...buf.slice(i, i + CHUNK_SIZE).map(sixBit));
         }
         firstLine += `'`;
 
-        // 1. initialize other variables
+        // 1. initialize some variables
         // the exact position of initialization depends on the options.
         //
         // τ: rANS state
@@ -985,6 +986,7 @@ export class Packer {
             [`κ`, `new Uint${countBits}Array(${numModels}<<${contextBits})`],
         ];
         if (!options.allowFreeVars) {
+            // see step 2 for the description
             secondLineInit.unshift([`ο`, `[]`]);
             secondLineInit.push([`ρ`, `0`], [`λ`, `0`]);
             if (quotes.length > 0) {
@@ -993,6 +995,10 @@ export class Packer {
         }
 
         let secondLine =
+            // 2. initialize more variables
+            // these can be efficiently initialized in a single statement,
+            // but plain arguments are more efficient if the decoder is wrapped with Function.
+            //
             // ο: decoded data
             // ρ: read position in ι
             // λ: write position in ο
@@ -1003,9 +1009,8 @@ export class Packer {
                 // 2. read until the known length
                 `λ<${inputLength};` +
 
+            // 9. code to be executed after reading one byte
             (quotes.length > 0 ?
-                // 7. code to be executed after reading one byte
-                //
                 // ν is now the decode byte plus additional topmost 1 bit, write (and keep) it
                 `ο[λ++]=ν-=${1 << inBits}` +
 
@@ -1031,7 +1036,7 @@ export class Packer {
             // if ν got more than inBits bits we are done reading one input character
             `for(ν=1;ν<${1 << inBits};` +
 
-                // 6. update contexts and weights with β and ν (which is now the bit context)
+                // 8. update contexts and weights with β and ν (which is now the bit context)
                 //
                 // δ: context hash
                 // μ: model index (unique in the entire code)
@@ -1052,9 +1057,9 @@ export class Packer {
 
             `)` +
 
-            // 4. predict and read one bit
             `for(` +
 
+                // 4. calculate context hashes (can be done after 5, but placed here to fill the space)
                 // Σ: sum of weighted probabilities
                 // φ: an array of context hashes
                 (singleDigitSelectors ?
@@ -1076,7 +1081,7 @@ export class Packer {
                     `)*${numModels}+μ` +
                 `),` +
 
-                // calculate the mixed prediction Σ
+                // 5. calculate the mixed prediction Σ
                 //
                 // δ: context hash
                 // μ: model index 
@@ -1091,20 +1096,23 @@ export class Packer {
                     `α/${recipLearningRate}` +
                 `)),` +
 
+                // 6. read a single bit
+                //
                 // Σ: squash(sum of weighted preds) followed by adjustment
                 `Σ=~-θ/(1+Math.exp(Σ))|1,` +
                 // β: decoded bit
                 `β=τ%θ<Σ,` +
                 `τ=τ%θ+(β?Σ:θ-Σ)*(τ>>${precision + 1})-!β*Σ` +
+
             `;` +
 
-                // 5. renormalize (and advance the input offset) if needed
+                // 7. renormalize (and advance the input offset) if needed
                 `τ<${pow2(28 - outBits)}` +
             `;` +
                 `τ=τ*${1<<outBits}|ι.charCodeAt(ρ++)&${(1 << outBits) - 1}` +
             `);`;
 
-        // 9. postprocessing
+        // 10. postprocessing and action
         // also should clobber π and κ unless they are function arguments,
         // so that the GC can free the memory as soon as possible.
         let outputVar = 'κ'; // can be replaced with assignment statements if possible
@@ -1117,7 +1125,7 @@ export class Packer {
 
             case 'js':
                 if (preparedJs.abbrs.length === 0) {
-                    outputVar = `κ=${options.allowFreeVars ? 'π=' : ''}${stringifiedInput()}`;
+                    outputVar = (options.allowFreeVars ? 'κ=π=' : '') + stringifiedInput();
                 } else if (preparedJs.abbrs.length < 3) {
                     secondLine += `κ=${options.allowFreeVars ? 'π=' : ''}${stringifiedInput()};`;
                     for (const [, abbr] of preparedJs.abbrs) {
