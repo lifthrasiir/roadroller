@@ -963,7 +963,14 @@ export class Packer {
         // ι: compressed data, where lowest 6 bits are used and higher bits are chosen to avoid escape sequences.
         // this should be isolated from other code for the best DEFLATE result.
         const sixBit = c => c === 0x1c || c === 0x3f ? c : c | 0x40;
-        let firstLine = `ι='`;
+        // the first few bits are the initial state, loaded immediately at the beginning.
+        const stateBytes = [];
+        let st = state;
+        while (st > 0) {
+            stateBytes.unshift(st & ((1 << outBits) - 1));
+            st >>= outBits;
+        }
+        let firstLine = `ι='${String.fromCharCode(...stateBytes.map(sixBit))}`;
         const CHUNK_SIZE = 8192;
         for (let i = 0; i < buf.length; i += CHUNK_SIZE) {
             firstLine += String.fromCharCode(...buf.slice(i, i + CHUNK_SIZE).map(sixBit));
@@ -973,13 +980,11 @@ export class Packer {
         // 1. initialize some variables
         // the exact position of initialization depends on the options.
         //
-        // τ: rANS state
         // θ: common scaling factor
         // ω: weights
         // π: predictions
         // κ: counts
         const secondLineInit = [
-            [`τ`, `${state}`],
             [`θ`, `1<<${precision + 1}`],
             [`ω`, `${JSON.stringify(Array(numModels).fill(0))}`],
             [`π`, `new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(1<<${precision - 1})`],
@@ -988,7 +993,7 @@ export class Packer {
         if (!options.allowFreeVars) {
             // see step 2 for the description
             secondLineInit.unshift([`ο`, `[]`]);
-            secondLineInit.push([`ρ`, `0`], [`λ`, `0`]);
+            secondLineInit.push([`τ`, `0`], [`ρ`, `0`], [`λ`, `0`]);
             if (quotes.length > 0) {
                 secondLineInit.push([`χ`, `0`]);
             }
@@ -999,12 +1004,13 @@ export class Packer {
             // these can be efficiently initialized in a single statement,
             // but plain arguments are more efficient if the decoder is wrapped with Function.
             //
+            // τ: rANS state
             // ο: decoded data
             // ρ: read position in ι
             // λ: write position in ο
             // χ: if in string the quote character code, otherwise 0 (same to state.quote)
             // we know the exact input length, so we don't have the end of data symbol
-            `for(${options.allowFreeVars ? `ο=[ρ=λ=${quotes.length > 0 ? 'χ=' : ''}0]` : ''};` +
+            `for(${options.allowFreeVars ? `ο=[τ=ρ=λ=${quotes.length > 0 ? 'χ=' : ''}0]` : ''};` +
 
                 // 2. read until the known length
                 `λ<${inputLength};` +
@@ -1035,6 +1041,30 @@ export class Packer {
             // ν: bit context, equal to `0b1xx..xx` where xx..xx is currently read bits
             // if ν got more than inBits bits we are done reading one input character
             `for(ν=1;ν<${1 << inBits};` +
+
+                // 6. calculate the mixed prediction Σ
+                //
+                // δ: context hash
+                // μ: model index 
+                // α: scratch variable
+                // ε: stretched probabilities later used by prediction adjustment
+                `ε=φ.map((δ,μ)=>(` +
+                    `α=π[δ]*2+1,` +
+                    // stretch(prob), needed for updates
+                    `α=Math.log(α/(θ-α)),` +
+                    `Σ-=ω[μ]*α,` +
+                    // premultiply with learning rate
+                    `α/${recipLearningRate}` +
+                `)),` +
+
+                // 7. read a single bit from the normalized state
+                // depends both on step 5 (renormalization) and on step 6 (mixed prediction).
+                //
+                // Σ: squash(sum of weighted preds) followed by adjustment
+                `Σ=~-θ/(1+Math.exp(Σ))|1,` +
+                // β: decoded bit
+                `β=τ%θ<Σ,` +
+                `τ=τ%θ+(β?Σ:θ-Σ)*(τ>>${precision + 1})-!β*Σ,` +
 
                 // 8. update contexts and weights with β and ν (which is now the bit context)
                 //
@@ -1079,34 +1109,12 @@ export class Packer {
                         `),` +
                         `${pow2(contextBits)}-1&α*997+ν${quotes.length > 0 ? '+!!χ*129' : ''}` +
                     `)*${numModels}+μ` +
-                `),` +
-
-                // 5. calculate the mixed prediction Σ
-                //
-                // δ: context hash
-                // μ: model index 
-                // α: scratch variable
-                // ε: stretched probabilities later used by prediction adjustment
-                `ε=φ.map((δ,μ)=>(` +
-                    `α=π[δ]*2+1,` +
-                    // stretch(prob), needed for updates
-                    `α=Math.log(α/(θ-α)),` +
-                    `Σ-=ω[μ]*α,` +
-                    // premultiply with learning rate
-                    `α/${recipLearningRate}` +
-                `)),` +
-
-                // 6. read a single bit
-                //
-                // Σ: squash(sum of weighted preds) followed by adjustment
-                `Σ=~-θ/(1+Math.exp(Σ))|1,` +
-                // β: decoded bit
-                `β=τ%θ<Σ,` +
-                `τ=τ%θ+(β?Σ:θ-Σ)*(τ>>${precision + 1})-!β*Σ` +
-
+                `)` +
             `;` +
 
-                // 7. renormalize (and advance the input offset) if needed
+                // 5. renormalize (and advance the input offset) if needed
+                // this is also used to read the initial state from the input,
+                // so has to be placed before step 7 (read a single bit).
                 `τ<${pow2(28 - outBits)}` +
             `;` +
                 `τ=τ*${1<<outBits}|ι.charCodeAt(ρ++)&${(1 << outBits) - 1}` +
