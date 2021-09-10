@@ -959,6 +959,17 @@ export class Packer {
             return 'θ';
         };
 
+        let contextSize;
+        {
+            let v = numModels, shift = contextBits;
+            while (v % 2 == 0) {
+                v >>= 1;
+                ++shift;
+            }
+            contextSize = `${v}<<${shift}`;
+            // we can also make use of θ, but that wouldn't work in the argument position
+        }
+
         // 0. first line
         // ι: compressed data, where lowest 6 bits are used and higher bits are chosen to avoid escape sequences.
         // this should be isolated from other code for the best DEFLATE result.
@@ -987,8 +998,8 @@ export class Packer {
         const secondLineInit = [
             [`θ`, `1<<${precision + 1}`],
             [`ω`, `${JSON.stringify(Array(numModels).fill(0))}`],
-            [`π`, `new Uint${predictionBits}Array(${numModels}<<${contextBits}).fill(1<<${precision - 1})`],
-            [`κ`, `new Uint${countBits}Array(${numModels}<<${contextBits})`],
+            [`π`, `new Uint${predictionBits}Array(${contextSize}).fill(1<<${precision - 1})`],
+            [`κ`, `new Uint${countBits}Array(${contextSize})`],
         ];
         if (!options.allowFreeVars) {
             // see step 2 for the description
