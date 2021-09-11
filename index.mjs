@@ -44,6 +44,25 @@ const ceilLog2 = (x, y = 1) => {
     return n;
 };
 
+// returns [m, e, m * 10^e] where (m-1) * 10^e < v <= m * 10^e, m < 100 and m mod 10 != 0.
+// therefore `${m}e${e}` is an upper bound approximation with ~2 significant digits.
+const approximateWithTwoSigDigits = v => {
+    if (v <= 0) return [0, 0, 0]; // special case
+    let exp = 0;
+    let tens = 1;
+    while (v >= tens * 100) {
+        ++exp;
+        tens *= 10;
+    }
+    let mant = Math.ceil(v / tens);
+    if (mant % 10 === 0) { // 60e6 -> 6e7
+        mant /= 10;
+        ++exp;
+        tens *= 10;
+    }
+    return [mant, exp, mant * tens];
+};
+
 // Node.js 14 doesn't have a global performance object.
 const getPerformanceObject = async () => {
     return globalThis.performance || (await import('perf_hooks')).performance;
@@ -587,7 +606,14 @@ const countBytesPerContext = options => (options.modelMaxCount < 128 ? 1 : optio
 
 const contextBitsFromMaxMemory = options => {
     const bytesPerContext = predictionBytesPerContext(options) + countBytesPerContext(options);
-    return floorLog2(options.maxMemoryMB * 1048576, options.sparseSelectors.length * bytesPerContext);
+    let contextBits = floorLog2(options.maxMemoryMB * 1048576, options.sparseSelectors.length * bytesPerContext);
+
+    // the decoder slightly overallocates the memory (~1%) so a naive calculation can exceed the memory limit;
+    // recalculate the actual memory usage and decrease contextBits in that case.
+    const [, , actualNumContexts] = approximateWithTwoSigDigits(options.sparseSelectors.length << contextBits);
+    if (actualNumContexts * bytesPerContext > options.maxMemoryMB * 1048576) --contextBits;
+
+    return contextBits;
 };
 
 // String.fromCharCode(...array) is short but doesn't work when array.length is "long enough".
@@ -650,8 +676,9 @@ export class Packer {
 
     get memoryUsageMB() {
         const contextBits = this.options.contextBits || contextBitsFromMaxMemory(this.options);
+        const [, , numContexts] = approximateWithTwoSigDigits(this.options.sparseSelectors.length << contextBits);
         const bytesPerContext = predictionBytesPerContext(this.options) + countBytesPerContext(this.options);
-        return this.options.sparseSelectors.length * bytesPerContext * (1 << contextBits) / 1048576;
+        return numContexts * bytesPerContext / 1048576;
     }
 
     static prepareText(inputs) {
@@ -959,16 +986,9 @@ export class Packer {
             return 'θ';
         };
 
-        let contextSize;
-        {
-            let v = numModels, shift = contextBits;
-            while (v % 2 == 0) {
-                v >>= 1;
-                ++shift;
-            }
-            contextSize = `${v}<<${shift}`;
-            // we can also make use of θ, but that wouldn't work in the argument position
-        }
+        // only keep two significant digits, rounding up
+        const [contextMant, contextExp] = approximateWithTwoSigDigits(numModels << contextBits);
+        const contextSize = `${contextMant}e${contextExp}`;
 
         // 0. first line
         // ι: compressed data, where lowest 6 bits are used and higher bits are chosen to avoid escape sequences.

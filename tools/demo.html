@@ -104,7 +104,7 @@ input[type=number] { width: 5em; }
 <aside id=$outputmessage></aside>
 <footer><ul>
 <li><label>Number of contexts: <input id=$numcontexts type=number value=12 min=1 max=64></label> <a href=#num-contexts title=Help>ℹ️</a>
-<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>96</span> MB in use)</label> <a href=#max-memory title=Help>ℹ️</a>
+<li><label>Maximum memory usage: <input id=$maxmemory type=number value=150 min=10 max=1024> MB (<span id=$usedmemory>-</span> MB in use)</label> <a href=#max-memory title=Help>ℹ️</a>
 <li><label><input type=checkbox id=$dirty> Allow the decoder to pollute the global scope</label> <a href=#dirty title=Help>ℹ️</a>
 <li><button id=$reset>Reset parameters</button> <button id=$optimize>Optimize parameters</button> <a href=#optimize title=Help>ℹ️</a>
 </ul><details><summary>Advanced configuration</summary><ul>
@@ -415,7 +415,7 @@ const compress = async optimize => {
 
         let prefix = '';
         const packer = new Packer(inputs, options);
-        $usedmemory.textContent = packer.memoryUsageMB;
+        $usedmemory.textContent = packer.memoryUsageMB.toFixed(1);
 
         if (optimize) {
             if (lastOptimizationLevel < 2) ++lastOptimizationLevel;

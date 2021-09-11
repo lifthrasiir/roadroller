@@ -309,7 +309,7 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
 
     if (verbose >= 1) {
         console.warn(
-            `Actual memory usage: ${packer.memoryUsageMB < 1 ? '< 1' : packer.memoryUsageMB} MB` +
+            `Actual memory usage: ${packer.memoryUsageMB < 1 ? '< 1' : packer.memoryUsageMB.toFixed(1)} MB` +
             (options.contextBits ? '' : ` (out of ${options.maxMemoryMB || 150} MB)`));
     }
 
