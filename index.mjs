@@ -876,9 +876,7 @@ export class Packer {
         return { abbrs: commonIdents, code: replacements + output, maxAbbreviations };
     }
 
-    static pack(inputsByType, options) {
-        const preparedText = Packer.prepareText(inputsByType['text'] || [], options);
-        const preparedJs = Packer.prepareJs(inputsByType['js'] || [], options);
+    static doPack(preparedText, preparedJs, mainInputAction, options) {
         // TODO if we are to have multiple inputs they have to be splitted
         const combinedInput = [...preparedText.text, ...preparedJs.code].map(c => c.charCodeAt(0));
 
@@ -1156,33 +1154,28 @@ export class Packer {
         // so that the GC can free the memory as soon as possible.
         let outputVar = 'κ'; // can be replaced with assignment statements if possible
 
-        const [input] = inputsByType['text'] || inputsByType['js'];
-        switch (input.type) {
-            case 'text':
-                outputVar = stringifiedInput(preparedText.utf8);
-                break;
-
-            case 'js':
-                if (preparedJs.abbrs.length === 0) {
-                    outputVar = (options.allowFreeVars ? 'κ=π=' : '') + stringifiedInput();
-                } else if (preparedJs.abbrs.length < 3) {
-                    secondLine += `κ=${options.allowFreeVars ? 'π=' : ''}${stringifiedInput()};`;
-                    for (const [, abbr] of preparedJs.abbrs) {
-                        secondLine += `with(κ.split(\`${escapeCharInTemplate(abbr)}\`))` +
-                            `κ=join(shift());`;
-                    }
-                } else {
-                    // character class is probably uncompressible so the shorter one is preferred
-                    const abbrCharSet = new Set(preparedJs.abbrs.map(([, abbr]) => abbr.charCodeAt(0)));
-                    const abbrCharClass1 = makeCharClass(abbrCharSet, true);
-                    const abbrCharClass2 = makeCharClass(abbrCharSet, false);
-                    const abbrCharClass = (abbrCharClass2.length < abbrCharClass1.length ? abbrCharClass2 : abbrCharClass1);
-                    secondLine +=
-                        `for(κ=${stringifiedInput()};π=/[${abbrCharClass}]/.exec(κ);)` +
-                            `with(κ.split(π))` +
-                                `κ=join(shift());`;
+        if (!preparedJs.code) {
+            outputVar = stringifiedInput(preparedText.utf8);
+        } else {
+            if (preparedJs.abbrs.length === 0) {
+                outputVar = (options.allowFreeVars ? 'κ=π=' : '') + stringifiedInput();
+            } else if (preparedJs.abbrs.length < 3) {
+                secondLine += `κ=${options.allowFreeVars ? 'π=' : ''}${stringifiedInput()};`;
+                for (const [, abbr] of preparedJs.abbrs) {
+                    secondLine += `with(κ.split(\`${escapeCharInTemplate(abbr)}\`))` +
+                        `κ=join(shift());`;
                 }
-                break;
+            } else {
+                // character class is probably uncompressible so the shorter one is preferred
+                const abbrCharSet = new Set(preparedJs.abbrs.map(([, abbr]) => abbr.charCodeAt(0)));
+                const abbrCharClass1 = makeCharClass(abbrCharSet, true);
+                const abbrCharClass2 = makeCharClass(abbrCharSet, false);
+                const abbrCharClass = (abbrCharClass2.length < abbrCharClass1.length ? abbrCharClass2 : abbrCharClass1);
+                secondLine +=
+                    `for(κ=${stringifiedInput()};π=/[${abbrCharClass}]/.exec(κ);)` +
+                        `with(κ.split(π))` +
+                            `κ=join(shift());`;
+            }
         }
 
         const [scopeSensitive, prefix, suffix] = {
@@ -1194,7 +1187,7 @@ export class Packer {
             // undocumented, mainly used for debugging
             'console': [false, `console.log(`, `)`],
             'return': [true, ``, ``],
-        }[input.action];
+        }[mainInputAction];
 
         const placeholderNames =
             'ι' +
@@ -1253,7 +1246,11 @@ export class Packer {
     }
 
     makeDecoder() {
-        const result = Packer.pack(this.inputsByType, this.options);
+        const preparedText = Packer.prepareText(this.inputsByType['text'] || [], this.options);
+        const preparedJs = Packer.prepareJs(this.inputsByType['js'] || [], this.options);
+        const [input] = this.inputsByType['text'] || this.inputsByType['js'];
+
+        const result = Packer.doPack(preparedText, preparedJs, input.action, this.options);
 
         // so that optimizer doesn't need to try numAbbreviations larger than maxAbbreviations
         if (this.options.numAbbreviations > result.maxAbbreviations) {
@@ -1273,17 +1270,29 @@ export class Packer {
         const performance = await getPerformanceObject();
         const copy = v => JSON.parse(JSON.stringify(v));
 
+        const cache = new Map(); // `${preferTextOverJS | 0},${numAbbreviations}` -> { preparedText, preparedJs }
+        const mainInputAction = (this.inputsByType['text'] || this.inputsByType['js'])[0].action;
+
         let maxAbbreviations = -1;
         const calculateSize = current => {
-            const inputsByType = { ...this.inputsByType };
-            if (current.preferTextOverJS && (inputsByType['text'] || inputsByType['js'])) {
-                inputsByType['text'] = [
-                    ...inputsByType['text'] || [],
-                    ...(inputsByType['js'] || []).map(input => ({ ...input, type: 'text' })),
-                ];
-                delete inputsByType['js'];
+            const options = { ...this.options, ...current };
+
+            const key = `${options.preferTextOverJS},${options.numAbbreviations}`;
+            if (!cache.has(key)) {
+                let textInputs = this.inputsByType['text'] || [];
+                let jsInputs = this.inputsByType['js'] || [];
+                if (current.preferTextOverJS) {
+                    textInputs = [...textInputs, ...jsInputs.map(input => ({ ...input, type: 'text' }))];
+                    jsInputs = [];
+                }
+
+                const preparedText = Packer.prepareText(textInputs, options);
+                const preparedJs = Packer.prepareJs(jsInputs, options);
+                cache.set(key, { preparedText, preparedJs });
             }
-            const result = Packer.pack(inputsByType, { ...this.options, ...current });
+
+            const { preparedText, preparedJs } = cache.get(key);
+            const result = Packer.doPack(preparedText, preparedJs, mainInputAction, options);
             if (maxAbbreviations < 0) maxAbbreviations = result.maxAbbreviations;
             return new Packed(result).estimateLength();
         };
