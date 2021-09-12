@@ -474,3 +474,19 @@ test('Packer with high entropy', t => { // also test long inputs
     t.is(packAndReturn(data, { type: 'text', sparseSelectors: [0] }), data);
 });
 
+test('parameter agility', t => {
+    // this also tests the versaatility of wasm implementation,
+    // which may work initially but fail subsequently due to the previous memory.
+    // following parameters specifically vary the memory layout for testing.
+    t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [0, 511] }), 23);
+    t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [511] }), 23);
+    t.is(packAndEval('3 + 4 * 5', { sparseSelectors: [511, 512, 513] }), 23);
+    t.is(packAndEval('3 + 4 * 5', { maxMemoryMB: 1, sparseSelectors: [511, 512, 513] }), 23);
+    t.is(packAndEval('3 + 4 * 5', { maxMemoryMB: 5, sparseSelectors: [511, 512, 513] }), 23);
+
+    t.is(packAndEval('3 + 4 * 5', { precision: 1 }), 23);
+    t.is(packAndEval('3 + 4 * 5', { precision: 21 }), 23);
+    t.is(packAndEval('3 + 4 * 5', { modelMaxCount: 1 }), 23);
+    t.is(packAndEval('3 + 4 * 5', { modelMaxCount: 32767 }), 23);
+});
+
