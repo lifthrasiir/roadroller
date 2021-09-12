@@ -123,8 +123,6 @@ The actual memory usage can be as low as a half of the specified due to the inte
 
 * Level 2 runs a thorough search with about 300 sets of parameters and takes about a minute or two. This is best useful for the release build and you would like to save best parameters for later uses.
 
-While not strictly required, `Packer.optimize` in the API strongly recommends the use of `resourcePool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ResourcePool()`.
-
 ### Advanced Configuration
 
 **Number of context bits** (CLI `-Zco|--context-bits BITS`, API `contextBits` in the options object) sets the size of individual model as opposed to the total memory use (`-M`), which is a product of the number of context and the size of each model. This explicit option is most useful for the fair benchmarking, since some parameters like `-Zpr` or `-Zmc` affect the memory use and therefore this parameter.

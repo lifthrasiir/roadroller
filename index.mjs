@@ -691,7 +691,7 @@ export class Packer {
             modelRecipBaseCount: options.modelRecipBaseCount || 20,
             recipLearningRate: options.recipLearningRate || Math.max(1, 500),
             contextBits: options.contextBits,
-            resourcePool: options.resourcePool || options.arrayBufferPool,
+            resourcePool: options.resourcePool || options.arrayBufferPool || new ResourcePool(),
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
             allowFreeVars: options.allowFreeVars,
             disableWasm: options.disableWasm,
