@@ -295,10 +295,16 @@ function testDefaultModel(title, modelQuotes) {
         t.deepEqual(model.quotesSeen, new Set(modelQuotes ? [39, 96] : []));
 
         // test compressWithDefaultModel as well
-        const compressed2 = compressWithDefaultModel(input, options);
-        t.deepEqual(compressed2.state, compressed.state);
-        t.deepEqual(compressed2.buf, compressed.buf);
-        t.deepEqual(compressed2.quotesSeen, model.quotesSeen);
+        for (const disableWasm of [true, false]) {
+            // the wasm result should not only decompress correctly, but also
+            // be identical to the non-wasm result so that the compression
+            // ratio is never affected.
+            options.disableWasm = disableWasm;
+            const compressed2 = compressWithDefaultModel(input, options);
+            t.deepEqual(compressed2.state, compressed.state);
+            t.deepEqual(compressed2.buf, compressed.buf);
+            t.deepEqual(compressed2.quotesSeen, model.quotesSeen);
+        }
     });
 }
 
@@ -328,6 +334,32 @@ test('DirectContextModel.confirmations', t => {
             const input = [...crypto.randomBytes(size)];
             const compressed = compressWithModel(input, new DirectContextModel(options), options);
             const decompressed = decompressWithModel(compressed, new DirectContextModel(options), options);
+            t.deepEqual(decompressed, input);
+        }
+    }
+});
+
+test('DefaultModel.confirmations', t => {
+    // same as above, but tests the wasm version
+    const resourcePool = new ResourcePool();
+    const options = {
+        inBits: 8,
+        outBits: 8,
+        precision: 8, // additionally required to trigger the mark overflow within 256 tries
+        contextBits: 5, // 32 elements
+        modelMaxCount: 63,
+        sparseSelectors: [0, 1, 2, 3, 4],
+        modelRecipBaseCount: 20,
+        recipLearningRate: 256,
+        modelQuotes: false,
+        resourcePool,
+    };
+
+    for (const size of [1, 10]) {
+        for (let i = 0; i < 1000; ++i) {
+            const input = [...crypto.randomBytes(size)];
+            const compressed = compressWithDefaultModel(input, options);
+            const decompressed = decompressWithModel(compressed, new DefaultModel(options), options);
             t.deepEqual(decompressed, input);
         }
     }

@@ -17,12 +17,14 @@ if (!m) throw 'demo.html does not match the expected template';
 const [, preamble, style, body, script] = m;
 
 const roadrollerCode = fs.readFileSync(await resolve('../index.mjs'), { encoding: 'utf-8' });
+const wasmCode = fs.readFileSync(await resolve('../wasm.mjs'), { encoding: 'utf-8' });
 const deflateCode = fs.readFileSync(await resolve('../deflate.mjs'), { encoding: 'utf-8' });
 const jsTokensCode = fs.readFileSync(await resolve('../js-tokens.mjs'), { encoding: 'utf-8' });
 
 const { code, vars } = await minifyJs(
     stripModule(deflateCode) +
     stripModule(jsTokensCode) +
+    stripModule(wasmCode) +
     stripModule(roadrollerCode) +
     stripModule(script, true)
 );

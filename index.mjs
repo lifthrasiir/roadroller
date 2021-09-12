@@ -18,6 +18,8 @@ import {
 
 import { estimateDeflatedSize } from './deflate.mjs';
 
+import { getContextItemShift, makeDefaultModelRunner } from './wasm.mjs';
+
 //------------------------------------------------------------------------------
 
 // returns clamp(0, floor(log2(x/y)), 31) where x and y are integers.
@@ -74,6 +76,7 @@ export class ResourcePool {
     constructor() {
         // arrayBuffers.get(size) is an array of ArrayBuffer of given size
         this.arrayBuffers = new Map();
+        this.wasmRunners = new Map();
     }
 
     allocate(parent, size) {
@@ -92,6 +95,13 @@ export class ResourcePool {
             this.arrayBuffers.set(buf.byteLength, available);
         }
         available.push(buf);
+    }
+
+    wasmDefaultModelRunner(contextItemShift) {
+        if (!this.wasmRunners.get(contextItemShift)) {
+            this.wasmRunners.set(contextItemShift, makeDefaultModelRunner(contextItemShift));
+        }
+        return this.wasmRunners.get(contextItemShift);
     }
 }
 
@@ -535,10 +545,52 @@ export const compressWithModel = (input, model, options) => {
 };
 
 export const compressWithDefaultModel = (input, options) => {
-    const model = new DefaultModel(options);
-    const ret = compressWithModel(input, model, options);
-    ret.quotesSeen = model.quotesSeen;
-    return ret;
+    // if the model is _exactly_ a DefaultModel and no fancy options are in use,
+    // we have a faster implementation using JIT-compiled WebAssembly instances.
+    // we only use it when we have a guarantee that the wasm instance can be cached.
+    let runDefaultModel;
+    const resourcePool = options.resourcePool || options.arrayBufferPool;
+    if (
+        resourcePool &&
+        (options.preset || []).length === 0 &&
+        !options.disableWasm &&
+        !options.calculateByteEntropy &&
+        options.sparseSelectors.length <= 64 &&
+        options.sparseSelectors.every(sel => sel < 0x8000)
+    ) {
+        const contextItemShift = getContextItemShift(options);
+        const resourcePool = options.resourcePool || options.arrayBufferPool;
+        try {
+            runDefaultModel = resourcePool.wasmDefaultModelRunner(contextItemShift);
+        } catch (e) {
+            // WebAssembly is probably not supported, fall back to the pure JS impl
+        }
+    }
+
+    if (runDefaultModel) {
+        const { predictions, quotesSeen } = runDefaultModel(input, options);
+
+        const { inBits, outBits } = options;
+        const encoder = new AnsEncoder(options);
+        for (let offset = 0, bitOffset = 0; offset < input.length; ++offset) {
+            const code = input[offset];
+            for (let i = inBits - 1; i >= 0; --i) {
+                const bit = (code >> i) & 1;
+                const prob = predictions[bitOffset++];
+                encoder.writeBit(bit, prob);
+            }
+        }
+        const { state, buf } = encoder.finish();
+
+        const bufLengthInBytes = Math.ceil(buf.length * (outBits < 0 ? Math.log2(-outBits) : outBits) / 8);
+        const inputLength = input.length;
+        return { state, buf, inputLength, bufLengthInBytes, quotesSeen };
+    } else {
+        const model = new DefaultModel(options);
+        const ret = compressWithModel(input, model, options);
+        ret.quotesSeen = model.quotesSeen;
+        return ret;
+    }
 };
 
 export const decompressWithModel = ({ state, buf, inputLength }, model, options) => {
@@ -642,6 +694,7 @@ export class Packer {
             resourcePool: options.resourcePool || options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
             allowFreeVars: options.allowFreeVars,
+            disableWasm: options.disableWasm,
         };
 
         this.inputsByType = {};

@@ -108,6 +108,7 @@ export interface CompressOptions extends AnsOptions {
 }
 
 export interface DefaultModelCompressOptions extends CompressOptions, DefaultModelOptions {
+    disableWasm?: boolean;
 }
 
 export interface Output {
