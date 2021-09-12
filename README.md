@@ -1,6 +1,6 @@
 # Roadroller: Flattens Your JavaScript Demo
 
-**Roadroller** is a heavyweight JavaScript packer designed for large [demos][demo] of at least 10 KB in size, like [js13kGames]. Depending on the input it can provide up to 15% additional compression compared to [Zopfli]. **[Try it online][online]!**
+**Roadroller** is a heavyweight JavaScript packer for large [demos][demo]. It was originally designed for [js13kGames], but it remains usable for demos as small as 4KB. Depending on the input it can provide up to 15% additional compression compared to best ZIP/gzip recompressors. **[Try it online][online]!**
 
 Roadroller is considered "heavyweight" unlike typical JS packers such as [JSCrush] or [RegPack], because it is quite resource intensive and requires both a considerable amount of memory and a non-negligible run time. The default should work for most devices, but you can configure both aspects as you need.
 
@@ -36,9 +36,11 @@ const { firstLine, secondLine } = packer.makeDecoder();
 console.log(firstLine + secondLine);
 ```
 
+Roadroller as a library or a CLI command requires Node.js 14 or later. Node.js 16 is strongly recommended because Roadroller is substantially faster in 16 than in 14.
+
 ## Usage
 
-By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP/gzip (or more accurately, [DEFLATE]). Ideally your JS code should be already minified, probably using [Terser] or [Closure Compiler]; Roadroller only does a minimal whitespace and comment suppression.
+By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP, gzip or PNG bootstrap (or more accurately, [DEFLATE]). Ideally your JS code should be already minified, probably using [Terser] or [Closure Compiler]; Roadroller only does a minimal whitespace and comment suppression.
 
 The resulting code will look like this: (the newline is mostly for the explanation and can be removed)
 
@@ -47,11 +49,11 @@ eval(Function("[M='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'"
 ,...']charCodeAtUinyxp',"for(;e<12345;c[e++]=p-128)/* omitted */;return o")([],[],12345678,/* omitted */))
 ```
 
-The first line is a compressed data. It can contain control characters `` (U+001C) that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
+The first line is a compressed data. It can contain control characters like `` (U+001C) that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
 
 The second line is a compressor tuned for this particular input. By default the decompressed data immediately goes through `eval`, but you can configure what to do with that.
 
-The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from [AdvanceCOMP] or the aforementioned Zopfli. The first line and second line may form a single statement as above so they should not be separated; you can only put whitespace between them.
+The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from [AdvanceCOMP] or [ECT]. The first line and second line may form a single statement as above so they should not be separated; you can only put whitespace between them.
 
 <!--
 ### Multiple Inputs
@@ -63,7 +65,7 @@ You can also give multiple inputs to Roadroller; for example you can put shaders
 
 Each input can be further configured by input type and action. In the CLI you put corresponding options *before* the file path.
 
-**Input type** (CLI `-t|--type TYPE`, API `type` in the input object) determines the preprocessing step to improve the compression. Dropping a file to the input window also tries to detect the correct input type.
+**Input type** (CLI `-t|--type TYPE`, API `type` in the input object) determines the preprocessing step to improve the compression. <!--Dropping a file to the input window also tries to detect the correct input type.-->
 
 * **JavaScript** (`js`) assumes a valid JS code. Automatically removes all redundant whitespace and comments and enables a separate modelling for embedded strings. This also works for JSON.
 
@@ -155,7 +157,7 @@ The actual memory usage can be as low as a half of the specified due to the inte
 
 * The compressed JS code doesn't do anything beyond computation and the final action, so you can do anything before or after that. The [online demo][online] for example inserts a sort of splash screen as a fallback.
 
-* Roadroller, while being super effective for many inputs, is not a panacea. Roadroller is weaker at exploiting the duplication at a distance than DEFLATE. Make sure to check ADVZIP/Zopfli out.
+* Roadroller, while being super effective for many inputs, is not a panacea. Roadroller is weaker at exploiting the duplication at a distance than DEFLATE. Make sure to check ADVZIP or ECT out.
 
 See also the [wiki] for more information.
 
@@ -163,9 +165,7 @@ See also the [wiki] for more information.
 
 Roadroller itself and resulting packed codes are ECMAScript 2015 (ES6) compatible and should run in every modern Web browser and JS implementation. Implementations are assumed to be reasonably fast but otherwise it can run in slower interpreters. MSIE is not directly supported but it works fine (slowly) after simple transpiling.
 
-Roadroller and packed codes extensively use `Math.exp` and `Math.log` that are [implementation-approximated](https://262.ecma-international.org/#implementation-approximated), so there is a small but real possibility that they behave differently in different implementations. This is known to be a non-issue for browser JS engines as well as V8 and node.js as they use the same math library (fdlibm) for those functions, but you have been warned.
-
-By comparison, the Roadroller CLI assumes more from the environment and requires Node.js 14 or later. We strongly recommend Node.js 16 because Roadroller is significantly faster in 16 than in 14.
+Roadroller and packed codes extensively use `Math.exp` and `Math.log` that are [implementation-approximated](https://262.ecma-international.org/#implementation-approximated), so there is a small but real possibility that they behave differently in different implementations. This is known to be a non-issue for browser JS engines as well as V8 and Node.js as they use the same math library (fdlibm) for those functions, but you have been warned.
 
 ## Internals
 
@@ -189,12 +189,12 @@ The Roadroller compressor proper is licensed under the MIT license. In addition 
 
 [js13kGames]: https://js13kgames.com/
 
-[Zopfli]: https://github.com/google/zopfli
 [JSCrush]: http://www.iteral.com/jscrush/
 [RegPack]: https://siorki.github.io/regPack.html
 [Terser]: https://terser.org/
 [Closure Compiler]: https://closure-compiler.appspot.com/home
 [AdvanceCOMP]: http://www.advancemame.it/comp-readme
+[ECT]: https://github.com/fhanau/Efficient-Compression-Tool/
 [Crinkler]: https://github.com/runestubbe/Crinkler
 [ryg_rans]: https://github.com/rygorous/ryg_rans/
 

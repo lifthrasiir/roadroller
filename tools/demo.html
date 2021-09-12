@@ -120,16 +120,16 @@ input[type=number] { width: 5em; }
 </fieldset>
 
 <main id=$demotext>
-<p><strong><a href=https://github.com/lifthrasiir/roadroller>Roadroller</a></strong> is a heavyweight JavaScript packer designed for large <a href=https://en.wikipedia.org/wiki/Demoscene>demos</a> of at least 10 KB in size, like <a href=https://js13kgames.com/>js13kGames</a>. Depending on the input it can provide up to 15% additional compression compared to <a href=https://github.com/google/zopfli>Zopfli</a>.
+<p><strong><a href=https://github.com/lifthrasiir/roadroller>Roadroller</a></strong> is a heavyweight JavaScript packer for large <a href=https://en.wikipedia.org/wiki/Demoscene>demos</a>. It was originally designed for <a href=https://js13kgames.com/>js13kGames</a>, but it remains usable for demos as small as 4KB. Depending on the input it can provide up to 15% additional compression compared to best ZIP/gzip recompressors.
 <p>Roadroller is considered “heavyweight” unlike typical JS packers such as <a href=http://www.iteral.com/jscrush/>JSCrush</a> or <a href=https://siorki.github.io/regPack.html>RegPack</a>, because it is quite resource intensive and requires both a considerable amount of memory and a non-negligible run time. The default should work for most devices, but you can configure both aspects as you need.
 
 <h2>Usage</h2>
-<p>By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP/gzip (or more accurately, <a href=https://en.wikipedia.org/wiki/Deflate>DEFLATE</a>). Ideally your JS code should be already minified, probably using <a href=https://terser.org/>Terser</a> or <a href=https://closure-compiler.appspot.com/home>Closure Compiler</a>; Roadroller only does a minimal whitespace and comment suppression.
+<p>By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP, gzip or PNG bootstrap (or more accurately, <a href=https://en.wikipedia.org/wiki/Deflate>DEFLATE</a>). Ideally your JS code should be already minified, probably using <a href=https://terser.org/>Terser</a> or <a href=https://closure-compiler.appspot.com/home>Closure Compiler</a>; Roadroller only does a minimal whitespace and comment suppression.
 <p>The resulting code will look like this:
 <pre>eval(Function("[M='Zos~ZyF_sTdvfgJ^bIq<span class=c$1c>&#28;</span>_wJWLGSIz}<span class=c$1c>&#28;</span>Chb?rMch}...'"&#10;,...']charCodeAtUinyxp',"for(;e&lt;12345;c[e++]=p-128)/* omitted */;return o")([],[],12345678,/* omitted */))</pre>
-<p>The first line is a compressed data. It can contain control characters <code class=c$1c>&#28;</code> that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
+<p>The first line is a compressed data. It can contain control characters like <code class=c$1c>&#28;</code> that might not render in certain environments. Nevertheless you should make sure that they are all copied in verbatim.
 <p>The second line is a compressor tuned for this particular input. By default the decompressed data immediately goes through <code>eval</code>, but you can configure what to do with that.
-<p>The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from <a href=http://www.advancemame.it/comp-readme>AdvanceCOMP</a> or the aforementioned Zopfli. The first line and second line may form a single statement as above so they should not be separated; you can only concatenate them.
+<p>The first line is very incompressible unlike the second line, so ideally you should compress two lines separately. This is best done by using ADVZIP from <a href=http://www.advancemame.it/comp-readme>AdvanceCOMP</a> or <a href=https://github.com/fhanau/Efficient-Compression-Tool/>ECT</a>. The first line and second line may form a single statement as above so they should not be separated; you can only concatenate them.
 
 <!--
 <h3>Multiple Inputs</h3>
