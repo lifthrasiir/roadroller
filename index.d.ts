@@ -107,6 +107,9 @@ export interface CompressOptions extends AnsOptions {
     calculateByteEntropy?: boolean;
 }
 
+export interface DefaultModelCompressOptions extends CompressOptions, DefaultModelOptions {
+}
+
 export interface Output {
     inputLength: number;
     state: number;
@@ -118,7 +121,12 @@ export interface OutputExtra extends Output {
     byteEntropy?: number[];
 }
 
+export interface DefaultModelOutputExtra extends OutputExtra {
+    quotesSeen: Set<number>;
+}
+
 export function compressWithModel(input: ArrayLike<number>, model: Model, options: CompressOptions): OutputExtra;
+export function compressWithDefaultModel(input: ArrayLike<number>, options: DefaultModelCompressOptions): DefaultModelOutputExtra;
 export function decompressWithModel(output: Output, model: Model, options: CompressOptions): number[];
 
 export interface OptimizerProgressInfo<Params = number[]> {

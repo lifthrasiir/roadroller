@@ -534,6 +534,13 @@ export const compressWithModel = (input, model, options) => {
     return { state, buf, inputLength, bufLengthInBytes, byteEntropy };
 };
 
+export const compressWithDefaultModel = (input, options) => {
+    const model = new DefaultModel(options);
+    const ret = compressWithModel(input, model, options);
+    ret.quotesSeen = model.quotesSeen;
+    return ret;
+};
+
 export const decompressWithModel = ({ state, buf, inputLength }, model, options) => {
     const { inBits, preset = [], inputEndsWithByte } = options;
     const decoder = new AnsDecoder({ state, buf }, options);
@@ -894,8 +901,7 @@ export class Packer {
         const contextBits = options.contextBits || contextBitsFromMaxMemory(options);
 
         const compressOptions = { ...options, inBits, outBits, modelQuotes, contextBits };
-        const model = new DefaultModel(compressOptions);
-        const { buf, state, inputLength, bufLengthInBytes } = compressWithModel(combinedInput, model, compressOptions);
+        const { buf, state, inputLength, bufLengthInBytes, quotesSeen } = compressWithDefaultModel(combinedInput, compressOptions);
 
         const numModels = sparseSelectors.length;
         const predictionBits = 8 * predictionBytesPerContext(compressOptions);
@@ -910,7 +916,7 @@ export class Packer {
             selectors.push(bits.reverse());
         }
         const singleDigitSelectors = sparseSelectors.every(sel => sel < 512);
-        const quotes = [...model.quotesSeen].sort((a, b) => a - b);
+        const quotes = [...quotesSeen].sort((a, b) => a - b);
 
         // 2+ decimal points doesn't seem to make any difference after DEFLATE
         const modelBaseCount = { 1: '1', 2: '.5', 5: '.2', 10: '.1' }[modelRecipBaseCount] || `1/${modelRecipBaseCount}`;

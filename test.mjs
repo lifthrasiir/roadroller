@@ -1,8 +1,8 @@
 import test from 'ava';
 import * as crypto from 'crypto';
 import {
-    compressWithModel, decompressWithModel
     ResourcePool, AnsEncoder, AnsDecoder, DirectContextModel, DefaultModel, Packer,
+    compressWithModel, compressWithDefaultModel, decompressWithModel
 } from './index.mjs';
 
 //------------------------------------------------------------------------------
@@ -262,6 +262,53 @@ test('inputEndsWithByte', t => {
 
 //------------------------------------------------------------------------------
 
+const testCode = testCompressWithModel.toString();
+
+function testDefaultModel(title, modelQuotes) {
+    test(title, async t => {
+        const input = [...testCode].map(c => c.charCodeAt(0));
+
+        const options = {
+            inBits: 7,
+            outBits: 8,
+            sparseSelectors: [0, 1, 2, 3, 4],
+            contextBits: 12,
+            precision: 16,
+            modelMaxCount: 63,
+            modelRecipBaseCount: 20,
+            recipLearningRate: 256,
+            modelQuotes,
+        };
+        let model;
+
+        model = new DefaultModel(options);
+        const compressed = compressWithModel(input, model, options);
+
+        // the code should compress very well, otherwise it went horribly wrong
+        const ratio = compressed.bufLengthInBytes / input.length;
+        t.assert(ratio < 0.5);
+
+        model = new DefaultModel(options);
+        const decompressed = decompressWithModel(compressed, model, options);
+        t.deepEqual(decompressed, input);
+
+        t.deepEqual(model.quotesSeen, new Set(modelQuotes ? [39, 96] : []));
+
+        // test compressWithDefaultModel as well
+        const compressed2 = compressWithDefaultModel(input, options);
+        t.deepEqual(compressed2.state, compressed.state);
+        t.deepEqual(compressed2.buf, compressed.buf);
+        t.deepEqual(compressed2.quotesSeen, model.quotesSeen);
+    });
+}
+
+testDefaultModel('DefaultModel', false);
+testDefaultModel('DefaultModel modelQuotes', true);
+
+// subsequent Packer tests will internally use compressWithDefaultModel.
+
+//------------------------------------------------------------------------------
+
 test('DirectContextModel.confirmations', t => {
     const resourcePool = new ResourcePool();
     const options = {
@@ -284,40 +331,6 @@ test('DirectContextModel.confirmations', t => {
             t.deepEqual(decompressed, input);
         }
     }
-});
-
-//------------------------------------------------------------------------------
-
-const testCode = testCompressWithModel.toString();
-
-test('compress with DefaultModel', t => {
-    const input = [...testCode].map(c => c.charCodeAt(0));
-
-    const options = {
-        inBits: 7,
-        outBits: 8,
-        sparseSelectors: [0, 1, 2, 3, 4],
-        contextBits: 12,
-        precision: 16,
-        modelMaxCount: 63,
-        modelRecipBaseCount: 20,
-        recipLearningRate: 256,
-        modelQuotes: true,
-    };
-    let model;
-
-    model = new DefaultModel(options);
-    const compressed = compressWithModel(input, model, options);
-
-    // the code should compress very well, otherwise it went horribly wrong
-    const ratio = compressed.bufLengthInBytes / input.length;
-    t.assert(ratio < 0.5);
-
-    model = new DefaultModel(options);
-    const decompressed = decompressWithModel(compressed, model, options);
-    t.deepEqual(decompressed, input);
-
-    t.deepEqual(model.quotesSeen, new Set([39, 96]));
 });
 
 //------------------------------------------------------------------------------
