@@ -423,7 +423,7 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
     }
 
     const packed = packer.makeDecoder();
-    const output = packed.firstLine + '\n' + packed.secondLine;
+    const output = packed.firstLine + packed.secondLine;
     const compressedLength = packed.estimateLength();
     const ratio = origLength > 0 ? 100 - compressedLength / origLength * 100 : -Infinity;
     if (!optimize && verbose >= 0) {

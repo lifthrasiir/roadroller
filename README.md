@@ -33,14 +33,14 @@ const packer = new Packer(inputs, options);
 await packer.optimize(); // takes less than 10 seconds by default
 
 const { firstLine, secondLine } = packer.makeDecoder();
-console.log(firstLine + '\n' + secondLine);
+console.log(firstLine + secondLine);
 ```
 
 ## Usage
 
 By default Roadroller receives your JS code and returns a compressed JS code that should be further compressed with ZIP/gzip (or more accurately, [DEFLATE]). Ideally your JS code should be already minified, probably using [Terser] or [Closure Compiler]; Roadroller only does a minimal whitespace and comment suppression.
 
-The resulting code will look like this:
+The resulting code will look like this: (the newline is mostly for the explanation and can be removed)
 
 ```javascript
 eval(Function("[M='Zos~ZyF_sTdvfgJ^bIq_wJWLGSIz}Chb?rMch}...'"

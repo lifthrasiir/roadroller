@@ -475,8 +475,8 @@ const compress = async optimize => {
 
             const packed = packer.makeDecoder();
             if (!optimize && lastRefreshTicks !== refreshTicks) return;
-            output = packed.firstLine + '\n' + packed.secondLine;
-            $output1.textContent = packed.firstLine + '\n';
+            output = packed.firstLine + packed.secondLine;
+            $output1.textContent = packed.firstLine;
             $output2.textContent = packed.secondLine;
             updateOutput(prefix, origLength, packed.estimateLength());
         });
