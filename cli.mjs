@@ -2,7 +2,7 @@
 
 import * as fs from 'fs';
 import * as process from 'process';
-import { ArrayBufferPool, Packer, defaultSparseSelectors } from './index.mjs';
+import { ResourcePool, Packer, defaultSparseSelectors } from './index.mjs';
 
 let VERSION = 'unknown';
 try {
@@ -116,7 +116,7 @@ async function parseArgs(args) {
     const inputs = [];
     let currentInput = {};
     const options = {
-        arrayBufferPool: new ArrayBufferPool(),
+        resourcePool: new ResourcePool(),
     };
     let command;
     let optimize;

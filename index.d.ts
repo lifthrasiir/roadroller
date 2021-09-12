@@ -1,8 +1,13 @@
-export class ArrayBufferPool {
+export class ResourcePool {
     constructor();
+    /** @deprecated Should not be used externally! */
     allocate(parent: object, size: number): ArrayBuffer;
+    /** @deprecated Should not be used externally! */
     release(buf: ArrayBuffer): void;
 }
+
+/** @deprecated Use {@link ResourcePool} instead */
+export const ArrayBufferPool = ResourcePool;
 
 export type ScaledFreq = number;
 
@@ -42,7 +47,9 @@ export interface DirectContextModelOptions {
     precision: number;
     modelMaxCount: number;
     modelRecipBaseCount: number;
-    arrayBufferPool?: ArrayBufferPool;
+    resourcePool?: ResourcePool;
+    /** @deprecated Use {@link DirectContextModelOptions.resourcePool} instead */
+    arrayBufferPool?: ResourcePool;
 }
 
 export class DirectContextModel implements Model {
@@ -90,7 +97,7 @@ export class DefaultModel implements LogisticMixModel {
     flushByte(currentByte: number, inBits: number): void;
     release(): void;
 
-    readonly quitesSeen: Set<number>;
+    readonly quotesSeen: Set<number>;
 }
 
 export interface CompressOptions extends AnsOptions {
@@ -164,7 +171,9 @@ export interface PackerOptions {
     precision?: number;
     modelMaxCount?: number;
     modelRecipBaseCount?: number;
-    arrayBufferPool?: ArrayBufferPool;
+    resourcePool?: ResourcePool;
+    /** @deprecated Use {@link PackerOptions.resourcePool} instead */
+    arrayBufferPool?: ResourcePool;
     recipLearningRate?: number;
     numAbbreviations?: number;
     allowFreeVars?: boolean;

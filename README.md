@@ -123,7 +123,7 @@ The actual memory usage can be as low as a half of the specified due to the inte
 
 * Level 2 runs a thorough search with about 300 sets of parameters and takes about a minute or two. This is best useful for the release build and you would like to save best parameters for later uses.
 
-While not strictly required, `Packer.optimize` in the API strongly recommends the use of `arrayBufferPool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ArrayBufferPool()`.
+While not strictly required, `Packer.optimize` in the API strongly recommends the use of `resourcePool` in the options object. Otherwise the optimization can run slower especially with larger memory. The pool can be created via `new ResourcePool()`.
 
 ### Advanced Configuration
 

@@ -1,8 +1,8 @@
 import test from 'ava';
 import * as crypto from 'crypto';
 import {
-    ArrayBufferPool, AnsEncoder, AnsDecoder, DirectContextModel, DefaultModel, Packer,
     compressWithModel, decompressWithModel
+    ResourcePool, AnsEncoder, AnsDecoder, DirectContextModel, DefaultModel, Packer,
 } from './index.mjs';
 
 //------------------------------------------------------------------------------
@@ -263,14 +263,14 @@ test('inputEndsWithByte', t => {
 //------------------------------------------------------------------------------
 
 test('DirectContextModel.confirmations', t => {
-    const arrayBufferPool = new ArrayBufferPool();
+    const resourcePool = new ResourcePool();
     const options = {
         inBits: 8,
         outBits: 8,
         precision: 16,
         contextBits: 5, // 32 elements
         modelMaxCount: 63,
-        arrayBufferPool,
+        resourcePool,
     };
 
     // the size of 1 will set ~8 elements and test for partial fills.

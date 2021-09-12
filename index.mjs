@@ -70,14 +70,14 @@ const getPerformanceObject = async () => {
 
 //------------------------------------------------------------------------------
 
-export class ArrayBufferPool {
+export class ResourcePool {
     constructor() {
-        // pool.get(size) is an array of ArrayBuffer of given size
-        this.pool = new Map();
+        // arrayBuffers.get(size) is an array of ArrayBuffer of given size
+        this.arrayBuffers = new Map();
     }
 
     allocate(parent, size) {
-        const available = this.pool.get(size);
+        const available = this.arrayBuffers.get(size);
         let buf;
         if (available) buf = available.pop();
         if (!buf) buf = new ArrayBuffer(size);
@@ -86,14 +86,16 @@ export class ArrayBufferPool {
 
     // FinalizationRegistry is also possible, but GC couldn't keep up with the memory usage
     release(buf) {
-        let available = this.pool.get(buf.byteLength);
+        let available = this.arrayBuffers.get(buf.byteLength);
         if (!available) {
             available = [];
-            this.pool.set(buf.byteLength, available);
+            this.arrayBuffers.set(buf.byteLength, available);
         }
         available.push(buf);
     }
 }
+
+export const ArrayBufferPool = ResourcePool;
 
 const newUintArray = (pool, parent, nbits, length) => {
     if (nbits <= 8) return new Uint8Array(pool ? pool.allocate(parent, length) : length);
@@ -230,18 +232,18 @@ export class AnsDecoder {
 //------------------------------------------------------------------------------
 
 export class DirectContextModel {
-    constructor({ inBits, contextBits, precision, modelMaxCount, modelRecipBaseCount, arrayBufferPool }) {
+    constructor({ inBits, contextBits, precision, modelMaxCount, modelRecipBaseCount, arrayBufferPool, resourcePool }) {
         this.inBits = inBits;
         this.contextBits = contextBits;
         this.precision = precision;
         this.modelMaxCount = modelMaxCount;
         this.modelBaseCount = 1 / modelRecipBaseCount;
 
-        this.arrayBufferPool = arrayBufferPool;
-        this.predictions = newUintArray(arrayBufferPool, this, precision, 1 << contextBits);
-        this.counts = newUintArray(arrayBufferPool, this, ceilLog2(modelMaxCount + 1), 1 << contextBits);
+        this.resourcePool = resourcePool || arrayBufferPool;
+        this.predictions = newUintArray(this.resourcePool, this, precision, 1 << contextBits);
+        this.counts = newUintArray(this.resourcePool, this, ceilLog2(modelMaxCount + 1), 1 << contextBits);
 
-        if (arrayBufferPool) {
+        if (this.resourcePool) {
             // we need to initialize the array since it may have been already used,
             // but UintXXArray.fill is comparatively slow, less than 5 GB/s even in fastest browsers.
             // we instead use more memory to confirm that each bit of context has been initialized.
@@ -251,7 +253,7 @@ export class DirectContextModel {
             // we choose a new mark to mark initialized elements *in this instance*.
             // if the mark reaches 255 we reset the entire array and start over.
             // this scheme effectively reduces the number of fill calls by a factor of 510.
-            this.confirmations = newUintArray(arrayBufferPool, this, 8, (1 << contextBits) + 1);
+            this.confirmations = newUintArray(this.resourcePool, this, 8, (1 << contextBits) + 1);
             this.mark = this.confirmations[1 << contextBits] + 1;
             if (this.mark === 256) {
                 this.mark = 1;
@@ -326,10 +328,10 @@ export class DirectContextModel {
     }
 
     release() {
-        if (this.arrayBufferPool) {
-            if (this.predictions) this.arrayBufferPool.release(this.predictions.buffer);
-            if (this.counts) this.arrayBufferPool.release(this.counts.buffer);
-            if (this.confirmations) this.arrayBufferPool.release(this.confirmations.buffer);
+        if (this.resourcePool) {
+            if (this.predictions) this.resourcePool.release(this.predictions.buffer);
+            if (this.counts) this.resourcePool.release(this.counts.buffer);
+            if (this.confirmations) this.resourcePool.release(this.confirmations.buffer);
             this.predictions = null;
             this.counts = null;
             this.confirmations = null;
@@ -630,7 +632,7 @@ export class Packer {
             modelRecipBaseCount: options.modelRecipBaseCount || 20,
             recipLearningRate: options.recipLearningRate || Math.max(1, 500),
             contextBits: options.contextBits,
-            arrayBufferPool: options.arrayBufferPool,
+            resourcePool: options.resourcePool || options.arrayBufferPool,
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
             allowFreeVars: options.allowFreeVars,
         };
