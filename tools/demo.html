@@ -190,10 +190,27 @@ input[type=number] { width: 5em; }
 Roadroller is brought to you by <a href=https://mearie.org/><svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 182 186"><path d="M0 0h54v102H19v52h35v32H0m34-70h20v24H34"/><path d="M64 0h54v1e2a22 22 0 000 56v30H64m54-72a12 12 0 000 28v-28"/><path d="M128 0h54v102h-33v12h33v8h-33v32h33v32h-54m35-52h19v8h-19"/></svg>Kang Seonghoon</a>.
 
 <script type=module>
-import { ArrayBufferPool, DefaultModel, defaultSparseSelectors, Packer } from '../index.mjs';
+import { ResourcePool, DefaultModel, defaultSparseSelectors, Packer } from '../index.mjs';
 import { estimateDeflatedSize } from '../deflate.mjs';
 
-let arrayBufferPool = new ArrayBufferPool();
+let resourcePool = new ResourcePool();
+let resourcePoolReleaseTimer = 0;
+
+// runs a function with resourcePool; the pool won't be released during
+// the function, and will be scheduled for release at return.
+const withResourcePool = async f => {
+    if (resourcePoolReleaseTimer) clearTimeout(resourcePoolReleaseTimer);
+    resourcePoolReleaseTimer = 0;
+    try {
+        return await f(resourcePool);
+    } finally {
+        if (resourcePoolReleaseTimer) clearTimeout(resourcePoolReleaseTimer);
+        resourcePoolReleaseTimer = setTimeout(() => {
+            resourcePoolReleaseTimer = 0;
+            resourcePool = new ResourcePool();
+        }, 60 * 1000);
+    }
+};
 
 const makeInput = () => {
     const root = $inputtemplate.content.firstElementChild.cloneNode(true);
@@ -401,60 +418,62 @@ const compress = async optimize => {
         const numAbbreviations = parseInt($numabbrevs.value, 10);
         if (!(0 <= numAbbreviations && numAbbreviations <= 64)) throw 'invalid number of abbreviations';
 
-        const options = {
-            maxMemoryMB,
-            arrayBufferPool,
-            sparseSelectors,
-            precision,
-            recipLearningRate,
-            modelMaxCount,
-            modelRecipBaseCount,
-            numAbbreviations,
-            allowFreeVars: $dirty.checked,
-        };
+        await withResourcePool(async resourcePool => {
+            const options = {
+                maxMemoryMB,
+                resourcePool,
+                sparseSelectors,
+                precision,
+                recipLearningRate,
+                modelMaxCount,
+                modelRecipBaseCount,
+                numAbbreviations,
+                allowFreeVars: $dirty.checked,
+            };
 
-        let prefix = '';
-        const packer = new Packer(inputs, options);
-        $usedmemory.textContent = packer.memoryUsageMB.toFixed(1);
+            let prefix = '';
+            const packer = new Packer(inputs, options);
+            $usedmemory.textContent = packer.memoryUsageMB.toFixed(1);
 
-        if (optimize) {
-            if (lastOptimizationLevel < 2) ++lastOptimizationLevel;
+            if (optimize) {
+                if (lastOptimizationLevel < 2) ++lastOptimizationLevel;
 
-            let tick = 0;
-            const result = await packer.optimize(lastOptimizationLevel, async info => {
-                const clock = 0x1f550 + tick++ % 12;
-                const pass = info.pass + (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '');
-                updateOutput(`${String.fromCodePoint(clock)} optimizing ${pass}: `, origLength, info.bestSize);
-                console.info(
-                    `(${pass}) ${JSON.stringify(info.current)}:`, info.currentSize,
-                    ...info.bestUpdated ? ['<-'] : info.currentRejected ? ['x'] : []);
-                await new Promise(resolve => requestAnimationFrame(resolve));
-            });
-            prefix = `optimized in ${(result.elapsedMsecs / 1000).toFixed(1)}s: `;
+                let tick = 0;
+                const result = await packer.optimize(lastOptimizationLevel, async info => {
+                    const clock = 0x1f550 + tick++ % 12;
+                    const pass = info.pass + (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '');
+                    updateOutput(`${String.fromCodePoint(clock)} optimizing ${pass}: `, origLength, info.bestSize);
+                    console.info(
+                        `(${pass}) ${JSON.stringify(info.current)}:`, info.currentSize,
+                        ...info.bestUpdated ? ['<-'] : info.currentRejected ? ['x'] : []);
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                });
+                prefix = `optimized in ${(result.elapsedMsecs / 1000).toFixed(1)}s: `;
 
-            // update the UI so that we can run optimizer multiple times
-            if (result.best.sparseSelectors) sparseSelectors = result.best.sparseSelectors;
-            if (result.best.precision) $precision.value = result.best.precision;
-            if (result.best.modelMaxCount) $modelmaxcount.value = result.best.modelMaxCount;
-            if (result.best.modelRecipBaseCount) $modelbasedivisor.value = result.best.modelRecipBaseCount;
-            if (result.best.recipLearningRate) $learningrate.value = result.best.recipLearningRate;
-            if (result.best.numAbbreviations !== undefined) $numabbrevs.value = result.best.numAbbreviations;
-            if (result.best.preferTextOverJS) {
-                for (const input of $inputs.children) {
-                    if (input.i$type.value === 'js') input.i$type.value = 'text';
+                // update the UI so that we can run optimizer multiple times
+                if (result.best.sparseSelectors) sparseSelectors = result.best.sparseSelectors;
+                if (result.best.precision) $precision.value = result.best.precision;
+                if (result.best.modelMaxCount) $modelmaxcount.value = result.best.modelMaxCount;
+                if (result.best.modelRecipBaseCount) $modelbasedivisor.value = result.best.modelRecipBaseCount;
+                if (result.best.recipLearningRate) $learningrate.value = result.best.recipLearningRate;
+                if (result.best.numAbbreviations !== undefined) $numabbrevs.value = result.best.numAbbreviations;
+                if (result.best.preferTextOverJS) {
+                    for (const input of $inputs.children) {
+                        if (input.i$type.value === 'js') input.i$type.value = 'text';
+                    }
                 }
+                $optimize.textContent = 'Optimize parameters (harder)';
             }
-            $optimize.textContent = 'Optimize parameters (harder)';
-        }
 
-        $selectors.value = sparseSelectors.join(',');
+            $selectors.value = sparseSelectors.join(',');
 
-        const packed = packer.makeDecoder();
-        if (!optimize && lastRefreshTicks !== refreshTicks) return;
-        output = packed.firstLine + '\n' + packed.secondLine;
-        $output1.textContent = packed.firstLine + '\n';
-        $output2.textContent = packed.secondLine;
-        updateOutput(prefix, origLength, packed.estimateLength());
+            const packed = packer.makeDecoder();
+            if (!optimize && lastRefreshTicks !== refreshTicks) return;
+            output = packed.firstLine + '\n' + packed.secondLine;
+            $output1.textContent = packed.firstLine + '\n';
+            $output2.textContent = packed.secondLine;
+            updateOutput(prefix, origLength, packed.estimateLength());
+        });
 
         $newwindow.hidden = false;
     } catch (e) {
