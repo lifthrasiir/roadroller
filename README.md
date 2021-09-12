@@ -123,6 +123,8 @@ The actual memory usage can be as low as a half of the specified due to the inte
 
 * Level 2 runs a thorough search with about 300 sets of parameters and takes about a minute or two. This is best useful for the release build and you would like to save best parameters for later uses.
 
+* Level ∞ is a special option only available in the CLI (`-OO`, with two capital Ohs) and runs increasingly slower optimizations in a run. Once the highest level is reached it runs that level forever. You need to explicitly terminate the search (e.g. CTRL-C), then it will proceed with the best parameters so far.
+
 ### Advanced Configuration
 
 **Number of context bits** (CLI `-Zco|--context-bits BITS`, API `contextBits` in the options object) sets the size of individual model as opposed to the total memory use (`-M`), which is a product of the number of context and the size of each model. This explicit option is most useful for the fair benchmarking, since some parameters like `-Zpr` or `-Zmc` affect the memory use and therefore this parameter.

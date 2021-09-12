@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import * as fs from 'fs';
-import * as process from 'process';
+import process from 'process';
+import * as readline from 'readline';
+import { performance } from 'perf_hooks';
 import { ResourcePool, Packer, defaultSparseSelectors } from './index.mjs';
 
 let VERSION = 'unknown';
@@ -48,7 +50,12 @@ Output options:
     1   Tries to optimize -S and most -Z arguments with ~30 attempts.
         Default when no optimizable arguments are given.
     2   Same to -O1 but with ~300 attempts.
+    O (capital letter Oh, looks like the infinity symbol ∞)
+        Continuously runs -O1 through the maximal level, then
+        repeatedly runs the maximal level until the user aborted.
   Anything beyond -O0 prints the best parameters unless -q is given.
+  Pressing Ctrl-C (SIGINT) anytime aborts the search and proceeds
+  with the best parameters so far.
 -M|--max-memory MEGABYTES [Range: 10..1024, Default: 150]
   Configures the maximum memory usage.
   The actual usage might be lower. Use -v to print the actual usage.
@@ -194,7 +201,8 @@ async function parseArgs(args) {
             outputPath = getArg(m);
         } else if (m = matchOptArg('optimize', 'O')) {
             if (optimize !== undefined) throw 'duplicate --optimize arguments';
-            optimize = Number(getArg(m));
+            const arg = getArg(m);
+            optimize = arg === 'O' ? Infinity : parseInt(arg, 10);
         } else if (m = matchOptArg('max-memory', 'M')) {
             if (options.maxMemoryMB !== undefined) throw 'duplicate --max-memory arguments';
             options.maxMemoryMB = parseInt(getArg(m), 10);
@@ -261,7 +269,7 @@ async function parseArgs(args) {
     }
     if (optimize === undefined) {
         optimize = defaultOptimize;
-    } else if (!between(0, optimize, 2)) {
+    } else if (!between(0, optimize, 2) && optimize !== Infinity) {
         throw 'invalid --optimize argument';
     }
     if (options.maxMemoryMB !== undefined) {
@@ -363,20 +371,52 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
             return args;
         };
 
-        const result = await packer.optimize(optimize, info => {
-            if (verbose < 0) return;
-            console.warn(
-                `(${info.pass}` +
-                (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '') +
-                `) ${format(info.current)}:`,
-                info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
+        // FIXME this disables the default SIGINT handling in Windows,
+        // so SIGINT would be doing nothing until the next log is reported
+        // (when setImmediate is called and signals are actually delivered).
+        // the only solution seems to be tick callbacks in compressWithModel etc.
+        let stop = false;
+        process.once('SIGINT', () => {
+            stop = true;
         });
+
+        let result;
+        const run = async level => {
+            result = await packer.optimize(level, async info => {
+                await new Promise(resolve => setImmediate(resolve)); // allow signals to be delivered
+                if (verbose >= 0) {
+                    console.warn(
+                        `(${info.pass}` +
+                        (typeof info.passRatio === 'number' ? ` ${(info.passRatio * 100).toFixed(1)}%` : '') +
+                        `) ${format(info.current)}:`,
+                        info.currentSize, info.bestUpdated ? '<-' : info.currentRejected ? 'x' : '');
+                }
+                if (stop) {
+                    result = info;
+                    return false;
+                }
+            });
+            options = { ...options, ...result.best };
+        };
+
+        const start = performance.now();
+        try {
+            if (isFinite(optimize)) {
+                await run(optimize);
+            } else {
+                for (let i = 1; ; ++i) await run(i);
+            }
+        } catch (e) {
+            if (!(e instanceof Error && e.message === 'search aborted')) throw e;
+        }
+        // do not rely on result.elapsedMsecs which may have been overwritten in -OO
+        const elapsedMsecs = performance.now() - start;
 
         if (verbose >= 0) {
             const ratio = origLength > 0 ? 100 - result.bestSize / origLength * 100 : -Infinity;
             console.warn(
-                `search done in ${(result.elapsedMsecs / 1000).toFixed(1)}s, ` +
-                `use \`${format(result.best)}\` to replicate:`,
+                (stop ? 'search aborted after' : 'search done in') +
+                ` ${(elapsedMsecs / 1000).toFixed(1)}s, use \`${format(result.best)}\` to replicate:`,
                 result.bestSize,
                 `(estimated, ${Math.abs(ratio).toFixed(2)}% ${ratio > 0 ? 'smaller' : 'larger'})`);
         }
