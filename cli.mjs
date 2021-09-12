@@ -46,7 +46,6 @@ Output options:
     0   Use the baseline parameters.
         Default when any optimizable arguments are given.
     1   Tries to optimize -S and most -Z arguments with ~30 attempts.
-        Also tries to replace "-t js" with "-t text" if beneficial.
         Default when no optimizable arguments are given.
     2   Same to -O1 but with ~300 attempts.
   Anything beyond -O0 prints the best parameters unless -q is given.
@@ -74,6 +73,12 @@ Output options:
 -Zco|--context-bits BITS [Range: 1..24+, Default: derived]
   Sets the size of each context model, as opposed to the total size (-M).
   The maximum can range from 24 to 30 depending on the number of contexts.
+-Zdy|--dynamic-models FLAGS [Default: 1 for JS, 0 for others]
+  Enables or disables specific dynamic models.
+  The value is a bitwise OR of the following bits:
+    1        Puts quoted strings (', ", \`) into a separate context.
+             This is only useful when every quotes are paired, so it
+             can't be used in English texts with contractions (e.g. isn't).
 -Zlr|--learning-rate RATE [Range: 1..2^53, Default: 500]
   Configures the learning rate of context mixer; smaller adapts faster.
 -Zmc|--model-max-count COUNT [Range: 1..32767, Default: 5]
@@ -218,6 +223,9 @@ async function parseArgs(args) {
             if (options.contextBits !== undefined) throw 'duplicate --context-bits arguments';
             options.contextBits = parseInt(getArg(m), 10);
             // -Zco is not optimizable, so its use doesn't change -O defaults
+        } else if (m = matchOptArg('dynamic-models', 'Zdy')) {
+            if (options.dynamicModels !== undefined) throw 'duplicate --dynamic-models arguments';
+            options.dynamicModels = parseInt(getArg(m), 10);
         } else if (m = matchOptArg('learning-rate', 'Zlr')) {
             if (options.recipLearningRate !== undefined) throw 'duplicate --learning-rate arguments';
             options.recipLearningRate = parseInt(getArg(m), 10);
@@ -277,6 +285,9 @@ async function parseArgs(args) {
     }
     if (options.numAbbreviations !== undefined && !between(0, options.numAbbreviations, 64)) {
         throw 'invalid --num-abbreviations argument';
+    }
+    if (options.dynamicModels !== undefined && !between(0, options.dynamicModels, 1)) {
+        throw 'invalid --dynamic-models argument';
     }
     if (options.recipLearningRate !== undefined && !between(1, options.recipLearningRate, 2**53)) {
         throw 'invalid --learning-rate argument';
@@ -343,11 +354,11 @@ async function compress({ inputs, options, optimize, outputPath, verbose }) {
             if (typeof combined.recipLearningRate === 'number') {
                 args = `-Zlr${combined.recipLearningRate} ${args}`;
             }
+            if (typeof combined.dynamicModels === 'number') {
+                args = `-Zdy${combined.dynamicModels} ${args}`;
+            }
             if (typeof combined.numAbbreviations === 'number') {
                 args = `-Zab${combined.numAbbreviations} ${args}`;
-            }
-            if (combined.preferTextOverJS) {
-                args = `-t text ${args}`;
             }
             return args;
         };

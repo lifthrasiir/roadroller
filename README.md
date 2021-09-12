@@ -141,6 +141,10 @@ The actual memory usage can be as low as a half of the specified due to the inte
 
 **Model base divisor** (CLI `-Zmd|--model-base-divisor DIVISOR`, API `modelRecipBaseCount` in the options object) adjusts how fast should individual contexts adapt *initially*, where larger is faster. The optimal value typically ranges from 10 to 100 for JS code inputs.
 
+**Dynamic model flags** (CLI `-Zdy|--dynamic-models FLAGS`, API `dynamicModels` in the options object) are used to enable or disable specific dynamic models, where each bit is turned on if the model is in use. The value of -1 is specially recognized as a default. There is currently one supported model:
+
+* The bit 0 (value 1) models quoted strings (', " or \`) and works well for source codes. It assumes that every quotes are paired, so it can't be used in English texts with contractions (e.g. isn't) and turned off by default in non-JS inputs.
+
 **Number of abbreviations** (CLI `-Zab|--num-abbreviations NUM`, API `numAbbreviations` in the options object) affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
 
 ### Tips and Tricks

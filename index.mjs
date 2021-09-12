@@ -681,6 +681,8 @@ const contextBitsFromMaxMemory = options => {
 // the threshold is implementation-defined, but 2^16 - epsilon seems common.
 const TEXT_DECODER_THRESHOLD = 65000;
 
+const DYN_MODEL_QUOTES = 1;
+
 export class Packer {
     constructor(inputs, options = {}) {
         this.options = {
@@ -693,6 +695,7 @@ export class Packer {
             contextBits: options.contextBits,
             resourcePool: options.resourcePool || options.arrayBufferPool || new ResourcePool(),
             numAbbreviations: typeof options.numAbbreviations === 'number' ? options.numAbbreviations : 64,
+            dynamicModels: options.dynamicModels,
             allowFreeVars: options.allowFreeVars,
             disableWasm: options.disableWasm,
         };
@@ -734,6 +737,10 @@ export class Packer {
         if (inputs.length !== 1 || !['js', 'text'].includes(inputs[0].type) || !['eval', 'write', 'console', 'return'].includes(inputs[0].action)) {
             throw new Error('Packer: this version of Roadroller supports exactly one JS or text input, please stay tuned for more!');
         }
+
+        if (this.options.dynamicModels === undefined) {
+            this.options.dynamicModels = inputs[0].type === 'js' ? DYN_MODEL_QUOTES : 0;
+        }
     }
 
     get memoryUsageMB() {
@@ -752,15 +759,22 @@ export class Packer {
         }
     }
 
-    static prepareJs(inputs, { numAbbreviations }) {
+    static prepareJs(inputs, { dynamicModels, numAbbreviations }) {
+        const modelQuotes = dynamicModels & DYN_MODEL_QUOTES;
+
         // we strongly avoid a token like 'this\'one' because the context model doesn't
         // know about escapes and anything after that would be suboptimally compressed.
         // we can't still avoid something like `foo${`bar`}quux`, where `bar` would be
-        // suboptimall compressed, but at least we will return to the normal state at the end.
-        const reescape = (s, pattern) =>
-            s.replace(
-                new RegExp(`\\\\?(${pattern})|\\\\.`, 'g'),
-                (m, q) => q ? '\\x' + q.charCodeAt(0).toString(16).padStart(2, '0') : m);
+        // suboptimally compressed, but at least we will return to the normal state at the end.
+        const reescape = (s, pattern) => {
+            if (modelQuotes) {
+                return s.replace(
+                    new RegExp(`\\\\?(${pattern})|\\\\.`, 'g'),
+                    (m, q) => q ? '\\x' + q.charCodeAt(0).toString(16).padStart(2, '0') : m);
+            } else {
+                return s;
+            }
+        };
 
         const identFreqs = new Map();
         const inputTokens = [];
@@ -828,7 +842,7 @@ export class Packer {
         for (let i = 0; i < 128; ++i) {
             // even though there might be no whitespace in the tokens,
             // we may have to need some space between two namelike tokens later.
-            if (![32, 34, 39, 96].includes(i)) unseenChars.add(String.fromCharCode(i));
+            if (i !== 32 && !(modelQuotes && [34, 39, 96].includes(i))) unseenChars.add(String.fromCharCode(i));
         }
         for (const tokens of inputTokens) {
             for (const token of tokens) {
@@ -945,7 +959,7 @@ export class Packer {
         const inBits = combinedInput.every(c => c <= 0x7f) ? 7 : 8;
         const outBits = 6;
         // TODO again, this should be controlled dynamically
-        const modelQuotes = preparedJs.code.length > 0;
+        const modelQuotes = !!(options.dynamicModels & DYN_MODEL_QUOTES);
 
         const {
             sparseSelectors, precision, modelMaxCount, modelRecipBaseCount,
@@ -1331,24 +1345,17 @@ export class Packer {
         const performance = await getPerformanceObject();
         const copy = v => JSON.parse(JSON.stringify(v));
 
-        const cache = new Map(); // `${preferTextOverJS | 0},${numAbbreviations}` -> { preparedText, preparedJs }
+        const cache = new Map(); // `${dynamicModels},${numAbbreviations}` -> { preparedText, preparedJs }
         const mainInputAction = (this.inputsByType['text'] || this.inputsByType['js'])[0].action;
 
         let maxAbbreviations = -1;
         const calculateSize = current => {
             const options = { ...this.options, ...current };
 
-            const key = `${options.preferTextOverJS},${options.numAbbreviations}`;
+            const key = `${options.dynamicModels},${options.numAbbreviations}`;
             if (!cache.has(key)) {
-                let textInputs = this.inputsByType['text'] || [];
-                let jsInputs = this.inputsByType['js'] || [];
-                if (current.preferTextOverJS) {
-                    textInputs = [...textInputs, ...jsInputs.map(input => ({ ...input, type: 'text' }))];
-                    jsInputs = [];
-                }
-
-                const preparedText = Packer.prepareText(textInputs, options);
-                const preparedJs = Packer.prepareJs(jsInputs, options);
+                const preparedText = Packer.prepareText(this.inputsByType['text'] || [], options);
+                const preparedJs = Packer.prepareJs(this.inputsByType['js'] || [], options);
                 cache.set(key, { preparedText, preparedJs });
             }
 
@@ -1469,14 +1476,17 @@ export class Packer {
         });
         if (best.modelMaxCount === this.options.modelMaxCount) delete best.modelMaxCount;
 
+        // optimize dynamicModels
+        for (let i = 0; i < 2; ++i) {
+            await updateBestAndReportProgress({ ...best, dynamicModels: i }, 'dynamicModels', i / 2);
+        }
+        if (best.dynamicModels === this.options.dynamicModels) delete best.dynamicModels;
+
         // optimize numAbbreviations
         await search(0, maxAbbreviations, LINEAR, [0, 16, 32, 64], async (i, ratio) => {
             return await updateBestAndReportProgress({ ...best, numAbbreviations: i }, 'numAbbreviations', ratio);
         });
         if (best.numAbbreviations === this.options.numAbbreviations) delete best.numAbbreviations;
-
-        // try to switch the JS input to text if any
-        await updateBestAndReportProgress({ ...best, preferTextOverJS: true }, 'preferTextOverJS');
 
         // optimize sparseSelectors by simulated annealing
         let current = this.options.sparseSelectors.slice();
@@ -1523,14 +1533,6 @@ export class Packer {
 
         // apply the final result to this
         this.options = { ...this.options, ...best };
-        if (best.preferTextOverJS && (this.inputsByType['text'] || this.inputsByType['js'])) {
-            this.inputsByType['text'] = [
-                ...this.inputsByType['text'] || [],
-                ...(this.inputsByType['js'] || []).map(input => ({ ...input, type: 'text' })),
-            ];
-            delete this.inputsByType['js'];
-        }
-
         return { elapsedMsecs: performance.now() - searchStart, best, bestSize };
     }
 }

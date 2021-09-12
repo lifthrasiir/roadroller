@@ -173,6 +173,10 @@ export interface Input {
     action: InputAction;
 }
 
+export const enum DynamicModelFlags {
+    Quotes = 1 << 0,
+}
+
 export interface PackerOptions {
     sparseSelectors?: number[];
     maxMemoryMB?: number;
@@ -185,6 +189,7 @@ export interface PackerOptions {
     arrayBufferPool?: ResourcePool;
     recipLearningRate?: number;
     numAbbreviations?: number;
+    dynamicModels?: number; // bit flags out of DynamicModelFlags
     allowFreeVars?: boolean;
 }
 
@@ -195,7 +200,9 @@ export interface OptimizedPackerOptions {
     modelRecipBaseCount?: number;
     recipLearningRate?: number;
     numAbbreviations?: number;
+    /** @deprecated Replaced by {@link OptimizedPackerOptions.dynamicModels}, no longer used */
     preferTextOverJS?: boolean;
+    dynamicModels?: number;
 }
 
 export class Packer {

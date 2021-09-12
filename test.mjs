@@ -435,21 +435,29 @@ test('abbreviations', t => {
 });
 
 test('reescaping', t => {
-    t.is(packAndReturn('"asdf\'asdf"'), '"asdf\'asdf"');
-    t.is(packAndReturn('"asdf\\"asdf"'), '"asdf\\x22asdf"');
-    t.is(packAndReturn('"asdf\\\'asdf"'), '"asdf\\\'asdf"');
-    t.is(packAndReturn('"asdf\\\"asdf"'), '"asdf\\x22asdf"');
-    t.is(packAndReturn('"asdf\\\\\'asdf"'), '"asdf\\\\\'asdf"');
-    t.is(packAndReturn("'asdf\"asdf'"), "'asdf\"asdf'");
-    t.is(packAndReturn("'asdf\\'asdf'"), "'asdf\\x27asdf'");
-    t.is(packAndReturn("'asdf\\\"asdf'"), "'asdf\\\"asdf'");
-    t.is(packAndReturn("'asdf\\\'asdf'"), "'asdf\\x27asdf'");
-    t.is(packAndReturn("'asdf\\\\\"asdf'"), "'asdf\\\\\"asdf'");
-    t.is(packAndReturn('`asdf\\\`asdf`'), '`asdf\\x60asdf`');
-    t.is(packAndReturn('`asdf\\\\\\\`asdf`'), '`asdf\\\\\\x60asdf`');
-    t.is(packAndReturn('`foo\\\`${`asdf\\\\\\\`asdf`}\\\`bar`'), '`foo\\x60${`asdf\\\\\\x60asdf`}\\x60bar`');
-    t.is(packAndReturn('/[\'"`]/g'), '/[\\x27\\x22\\x60]/g');
-    t.is(packAndReturn('/[\\\'\\"\\`]/g'), '/[\\x27\\x22\\x60]/g');
+    const examples = [
+        ['"asdf\'asdf"', '"asdf\'asdf"'],
+        ['"asdf\\"asdf"', '"asdf\\x22asdf"'],
+        ['"asdf\\\'asdf"', '"asdf\\\'asdf"'],
+        ['"asdf\\\"asdf"', '"asdf\\x22asdf"'],
+        ['"asdf\\\\\'asdf"', '"asdf\\\\\'asdf"'],
+        ["'asdf\"asdf'", "'asdf\"asdf'"],
+        ["'asdf\\'asdf'", "'asdf\\x27asdf'"],
+        ["'asdf\\\"asdf'", "'asdf\\\"asdf'"],
+        ["'asdf\\\'asdf'", "'asdf\\x27asdf'"],
+        ["'asdf\\\\\"asdf'", "'asdf\\\\\"asdf'"],
+        ['`asdf\\\`asdf`', '`asdf\\x60asdf`'],
+        ['`asdf\\\\\\\`asdf`', '`asdf\\\\\\x60asdf`'],
+        ['`foo\\\`${`asdf\\\\\\\`asdf`}\\\`bar`', '`foo\\x60${`asdf\\\\\\x60asdf`}\\x60bar`'],
+        ['/[\'"`]/g', '/[\\x27\\x22\\x60]/g'],
+        ['/[\\\'\\"\\`]/g', '/[\\x27\\x22\\x60]/g'],
+    ];
+
+    for (const [input, reescaped] of examples) {
+        // we don't need to reescape literals if we are not affected by quotes model anyway
+        t.is(packAndReturn(input, { dynamicModels: 0 }), input);
+        t.is(packAndReturn(input, { dynamicModels: 1 }), reescaped);
+    }
 });
 
 const LONG_ENOUGH_INPUT = 100000; // ...so that an alternative code path is triggered

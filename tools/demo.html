@@ -113,6 +113,7 @@ input[type=number] { width: 5em; }
 <li><label>Learning rate: <input id=$learningrate type=number value=500 min=1 max=99999></label> <a href=#learning-rate title=Help>ℹ️</a>
 <li><label>Model max count: <input id=$modelmaxcount type=number value=5 min=1 max=32767></label> <a href=#model-max-count title=Help>ℹ️</a>
 <li><label>Model base divisor: <input id=$modelbasedivisor type=number value=20 min=1 max=99999></label> <a href=#model-base-divisor title=Help>ℹ️</a>
+<li><label>Dynamic model flags: <input id=$dynmodels type=number value=-1 min=-1 max=1></label> <a href=#dynamic-models title=Help>ℹ️</a>
 <li><label>Number of abbreviations: <input id=$numabbrevs type=number value=64 min=0 max=64></label> <a href=#num-abbreviations title=Help>ℹ️</a>
 <!--<li><label><input type=checkbox id=$uncompressed> Optimize for uncompressed size</label> <a href=#uncompressed-only title=Help>ℹ️</a>-->
 </ul></details></footer>
@@ -177,6 +178,10 @@ input[type=number] { width: 5em; }
 <p id=learning-rate><strong>Learning rate</strong> adjusts how fast would the context mixer adapt, where smaller is faster. The default is 500 which should be fine for long enough inputs. If your demo is smaller than 10 KB you can also try smaller numbers.
 <p id=model-max-count><strong>Model max count</strong> adjusts how fast would individual contexts adapt, where smaller is faster. The model adapts fastest when a particular context is first seen, but that process becomes slower as the context is seen multiple times. This parameter limits how slowest the adaptation process can be. The default of 5 is specifically tuned for JS code inputs.
 <p id=model-base-divisor><strong>Model base divisor</strong> adjusts how fast should individual contexts adapt <em>initially</em>, where larger is faster. The optimal value typically ranges from 10 to 100 for JS code inputs.
+<p id=dynamic-models><strong>Dynamic model flags</strong> are used to enable or disable specific dynamic models, where each bit is turned on if the model is in use. The value of -1 is specially recognized as a default. There is currently one supported model:
+<ul>
+<li>The bit 0 (value 1) models quoted strings (', " or `) and works well for source codes. It assumes that every quotes are paired, so it can't be used in English texts with contractions (e.g. isn't) and turned off by default in non-JS inputs.
+</ul>
 <p id=num-abbreviations><strong>Number of abbreviations</strong> affects the preprocessing for JS code inputs. Common identifiers and reserved words can be abbreviated to single otherwise unused bytes during the preprocessing; this lessens the burden of context modelling which can only look at the limited number of past bytes. If this parameter is less than the number of allowable abbreviations some identifiers will be left as is, which can sometimes improve the compression.
 
 <h2>Command-line Usage and API</h2>
@@ -321,6 +326,7 @@ const initOutput = () => {
     $learningrate.onchange =
     $modelmaxcount.onchange =
     $modelbasedivisor.onchange =
+    $dynmodels.onchange =
     $numabbrevs.onchange =
     $dirty.onchange = () => refreshOutput();
 
@@ -415,6 +421,9 @@ const compress = async optimize => {
         if (!(1 <= modelMaxCount && modelMaxCount <= 32767)) throw 'invalid model max count';
         const modelRecipBaseCount = parseInt($modelbasedivisor.value, 10);
         if (!(1 <= modelRecipBaseCount && modelRecipBaseCount <= 99999)) throw 'invalid model base divisor';
+        const dynamicModels = parseInt($dynmodels.value, 10);
+        if (!(-1 <= dynamicModels && dynamicModels <= 1)) throw 'invalid dynamic model flags';
+        if (dynamicModels < 0) dynamicModels = undefined;
         const numAbbreviations = parseInt($numabbrevs.value, 10);
         if (!(0 <= numAbbreviations && numAbbreviations <= 64)) throw 'invalid number of abbreviations';
 
@@ -427,6 +436,7 @@ const compress = async optimize => {
                 recipLearningRate,
                 modelMaxCount,
                 modelRecipBaseCount,
+                dynamicModels,
                 numAbbreviations,
                 allowFreeVars: $dirty.checked,
             };
@@ -456,12 +466,8 @@ const compress = async optimize => {
                 if (result.best.modelMaxCount) $modelmaxcount.value = result.best.modelMaxCount;
                 if (result.best.modelRecipBaseCount) $modelbasedivisor.value = result.best.modelRecipBaseCount;
                 if (result.best.recipLearningRate) $learningrate.value = result.best.recipLearningRate;
+                if (result.best.dynamicModels !== undefined) $dynmodels.value = result.best.dynamicModels;
                 if (result.best.numAbbreviations !== undefined) $numabbrevs.value = result.best.numAbbreviations;
-                if (result.best.preferTextOverJS) {
-                    for (const input of $inputs.children) {
-                        if (input.i$type.value === 'js') input.i$type.value = 'text';
-                    }
-                }
                 $optimize.textContent = 'Optimize parameters (harder)';
             }
 
@@ -498,7 +504,7 @@ $newwindow.onclick = () => {
 initOutput();
 const input = makeInput();
 $inputs.append(input);
-input.i$data.value = 'document.write`<xmp style=white-space:pre-wrap>\n\n' + $demotext.innerText + '`';
+input.i$data.value = 'document.write`<xmp style=white-space:pre-wrap>\n\n' + $demotext.innerText.replace(/[\\`$]/g, m => '\\' + m) + '`';
 input.i$data.oninput();
 
 github.hidden = true;
