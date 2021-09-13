@@ -145,7 +145,7 @@ The actual memory usage can be as low as a half of the specified due to the inte
 
 **Model base divisor** (CLI `-Zmd|--model-base-divisor DIVISOR`, API `modelRecipBaseCount` in the options object) adjusts how fast should individual contexts adapt *initially*, where larger is faster. The optimal value typically ranges from 10 to 100 for JS code inputs.
 
-**Dynamic model flags** (CLI `-Zdy|--dynamic-models FLAGS`, API `dynamicModels` in the options object) are used to enable or disable specific dynamic models, where each bit is turned on if the model is in use. The value of -1 is specially recognized as a default. There is currently one supported model:
+**Dynamic model flags** (CLI `-Zdy|--dynamic-models FLAGS`, API `dynamicModels` in the options object) are used to enable or disable specific dynamic models, where each bit is turned on if the model is in use. There is currently one supported model:
 
 * The bit 0 (value 1) models quoted strings (', " or \`) and works well for source codes. It assumes that every quotes are paired, so it can't be used in English texts with contractions (e.g. isn't) and turned off by default in non-JS inputs.
 
