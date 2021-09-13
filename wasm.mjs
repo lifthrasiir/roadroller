@@ -608,6 +608,7 @@ export const makeDefaultModelRunner = contextItemShift => {
 
     let mark = 0;
     const maxMark = [0x100, 0x10000, 0x100000000][contextItemShift];
+    let M_CONTEXTS_END = M_CONTEXTS;
     return (input, { inBits, contextBits, sparseSelectors, precision, modelQuotes, modelMaxCount, modelRecipBaseCount, recipLearningRate }) => {
         const requiredContextItemShift = getContextItemShift({ precision, modelMaxCount });
         if (requiredContextItemShift > contextItemShift) throw 'contextItemShift overflow';
@@ -618,7 +619,8 @@ export const makeDefaultModelRunner = contextItemShift => {
         const M_END = M_OUTPUT + input.length * inBits * 4;
 
         // grow the memory if needed
-        if (M_END > memory.buffer.byteLength) {
+        const lastMemorySize = memory.buffer.byteLength;
+        if (M_END > lastMemorySize) {
             memory['grow']((M_END - memory.buffer.byteLength + 65535) >> 16);
         }
 
@@ -626,7 +628,34 @@ export const makeDefaultModelRunner = contextItemShift => {
         if (++mark === maxMark) {
             mark = 1;
             new Uint8Array(memory.buffer).fill(0);
+        } else {
+            // the marking mechanism assumes that a specific region of M_CONTEXTS
+            // can only be set in a controlled way, but this might not be true.
+            // for example, assume the following memory after the first invocation:
+            //
+            // +---------+----------------------------+---------+
+            // | globals |         M_CONTEXTS         | in&out  |
+            // +---------+----------------------------+---------+
+            //
+            // if the second invocation needs a larger M_CONTEXTS, the memory
+            // would end up with the following:
+            //
+            //                                        |<-dirty->|<-----zeroed---->|
+            // +---------+----------------------------------------------+---------+
+            // | globals |                  M_CONTEXTS                  | in&out  |
+            // +---------+----------------------------------------------+---------+
+            //
+            // there is a small chance that the dirty region is accessed *and*
+            // the value in the mark position coincides with the current mark.
+            // this bug can be very hard to track because in most cases the zeroed
+            // region would be much larger than the dirty region. we need to
+            // calculate the dirty region and clear it in order to prevent this.
+            const dirtyEnd = Math.min(lastMemorySize, M_PREGAP);
+            if (M_CONTEXTS_END < dirtyEnd) {
+                new Uint8Array(memory.buffer).fill(0, M_CONTEXTS_END, dirtyEnd);
+            }
         }
+        M_CONTEXTS_END = M_PREGAP;
 
         // fill in the required portion of memory
         const selectorView = new Uint32Array(memory.buffer, M_SELECTORS);
