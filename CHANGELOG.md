@@ -1,5 +1,33 @@
 # Changelog
 
+## v2.1.0 (2021-09-13)
+
+Compression improvements:
+
+- The compressor now uses a specialized WebAssembly implementation by default. (c2bd4353b1d22407ced62353fe5acffa0ce0487b, d9a38973cece36427e16671fc83ff98d91e0428c)
+- Cache the result of JavaScript code transformation during the optimization. Combined with the WebAssembly implementation, the optimization is up to 2.5 times faster than 2.0.0. (02d09a3906a443c6ee6f7edff310a2ac17b06e16)
+- Removed a special result by the optimizer for turning JS inputs into texts and made the equivalent a separate option (`-Zdy`). This also allows for using JS-specific modelling for texts if beneficial, and avoids the UI confusion present in the online demo. (14292282e2b926862ca580fde9bca125d559874f)
+- The rANS state is now embedded directly into the compressed data. (48ace3df9411840b2417b8ccbe43a09bf9d9e5dc)
+- The decoder is now slightly smaller. (819a574c21b4d220f1290299c698c34b25e8bd98, eb746302f8a598bea733111b9ea964882a8f3393, c6a88ee2764f9d00b47561cf35250c63b58ddf27)
+- Tools no longer generate a newline between the first and second "lines". (803de3d561a3a93efcc8f6770ead5f90a328d75c)
+
+UI/API improvements:
+
+- `-OO` option is added to the CLI, which runs a series of optimizations forever until a user request. The optimization now proceeds using the best parameters so far when the user has aborted the search with Ctrl-C even in other optimization levels. (17fef015b975868fb761232e9e397aebba976409)
+- Renamed `ArrayBufferPool` to `ResourcePool` to allow using it for other uses (e.g. WebAssembly modules). Also made it clear that `ResourcePool.allocate` should not be used outside of Roadroller. (3f073cf451abae9875471dbe1e4915723393162b)
+- Packer now creates its own `ResourcePool` if not given, so `Packer.optimize` is now equally fast with or without the pool. (2c727ea5c4aa77ec49b27c3f222be424551fa7de)
+- The online demo deallocates the pool a minute after the last compression. (5e86a59e80441db458ff7c4e114d7248d21e5c59)
+- `compressWithDefaultModel` has been added as a shortcut (and optimized version) for `compressWithModel` with `DefaultModel`. (1a644e95422b86352eb376605bfa2a8852013ddf)
+
+Bugfixes:
+
+- Fixed a typo in `index.d.ts`. (3f073cf451abae9875471dbe1e4915723393162b)
+
+Deprecations:
+
+- `ArrayBufferPool` and `arrayBufferPool` fields are now deprecated in favor of `ResourcePool` and `resourcePool`. (3f073cf451abae9875471dbe1e4915723393162b)
+- `OptimizedPackerOptions.preferTextOverJS` is no longer used and thus deprecated. (14292282e2b926862ca580fde9bca125d559874f)
+
 ## v2.0.0 (2021-08-28)
 
 **Breaking Changes:**

@@ -1,4 +1,4 @@
-// Roadroller.js: Flattens your JS demo
+// Roadroller: Flattens your JS demo
 // Copyright (c) 2021 Kang Seonghoon. See LICENSE.txt for details.
 
 // simulates a single and final DEFLATE block and returns its length in bytes.
