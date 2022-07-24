@@ -379,6 +379,8 @@ test('prepareJs without abbrs', t => {
     t.is(prepare(`switch (3) { case .3: ; }`), `switch(3){case.3:;}`);
     t.is(prepare(`switch (3) { case ㅎ: ; }`), `switch(3){case \\u314e:;}`);
     t.is(prepare(`for (const a of $tuffs) {}`), `for(const a of $tuffs){}`);
+    t.is(prepare(`a + ++b`), `a+ ++b`);
+    t.is(prepare(`a - --b`), `a- --b`);
 });
 
 //------------------------------------------------------------------------------

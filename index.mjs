@@ -895,11 +895,13 @@ export class Packer {
                     // - `/.../ in b` vs. `/.../in b`; also applies to other names or number literals
                     //   starting with digits, but only `in` and `instanceof` are possible in the valid JS.
                     // - `a + + b` vs. `a ++ b`
+                    // - `a + ++ b` vs. `a +++ b`
                     // - `a - - b` vs. `a -- b`
+                    // - `a - -- b` vs. `a --- b`
                     // - short HTML comments only recognized in web browsers:
                     //   - `a < ! --b` vs. `a <!--b`
                     //   - `a-- > b` vs. `a-->b`
-                    (prevToken.value + ' ' + token.value).match(/^\/ \/|\/ in(?:stanceof)?$|^(?:\+ \+|- -|! --|-- >)$/)
+                    (prevToken.value + ' ' + token.value).match(/^\/ \/|\/ in(?:stanceof)?$|^(?:\+ \+\+?|- --?|! --|-- >)$/)
                 )) {
                     if (prevToken.abbr) {
                         if (token.abbr) {
